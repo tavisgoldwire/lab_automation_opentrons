@@ -4,6 +4,7 @@ Curated, sanitized Opentrons protocols for an end-to-end automation workflow sup
 
 
 ## End-to-End 16S Workflow
+The diagram below summarizes the full automation and sequencing workflow, highlighting platform responsibilities (Flex vs OT-2) and downstream data flow into 16S bioinformatics.
 
 ![16S Workflow](assets/16S_flowchart.png)
 
@@ -15,6 +16,17 @@ PDF version: [Download Flowchart](assets/16S_flowchart.pdf)
 - Production-style protocol organization for **OT-2** and **Opentrons Flex**
 - Reusable helper functions and consistent configuration patterns (where applicable)
 - Clear separation of protocol stages + run assumptions
+
+## Technical Highlights
+- Modular protocol organization by platform
+- Parameterized volumes and deck configurations
+- Reproducible plate mapping across runs
+- Separation of automation logic from sequencing and analysis layers
+
+### Impact
+- Reduced manual handling variability across 16S library preparation workflows  
+- Enabled scalable plate-based automation on OT-2 and Flex platforms  
+- Structured outputs for downstream bioinformatics integration
 
 ## Repository structure
 - `protocols/OT-2/` — OT-2 protocols
