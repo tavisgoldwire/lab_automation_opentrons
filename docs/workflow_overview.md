@@ -4,7 +4,9 @@ These protocols were designed to automate a full 16S microbiome sequencing workf
 
 ## 1. DNA Extraction – ZymoBIOMICS 96 MagBead DNA Kit
 
-Initial automation focused on adapting the Zymo Research ZymoBIOMICS 96 MagBead DNA Kit for the Opentrons OT-2 platform. The design prioritized:
+Initial automation focused on adapting the Zymo Research ZymoBIOMICS 96 MagBead DNA Kit for the Opentrons Flex platform : [DNA Extraction Protocol](../protocols/Flex/Zymo_Magbead_DNA_Kit_48samples.py)
+
+**The design prioritized:**
 
 Reproducibility across 96-well plates
 
@@ -12,13 +14,13 @@ Reduction of manual pipetting variability
 
 Modular step structure for future adaptation
 
-In addition to extraction, general-purpose automation utilities were developed for:
+In addition to extraction, general-purpose automation utilities were developed for Opentrons OT-2:
 
-Plate pooling
+Plate pooling: [OT-2 Pooling Protocol](../protocols/OT-2/Pooling.py)
 
-Plate consolidation
+Plate consolidation: [OT-2 Consolidation Protocol](../protocols/OT-2/PlateCombining.py)
 
-Equimolar normalization
+Equimolar normalization: [OT-2 Dilution Protocol](../protocols/OT-2/MultiPlateDilutions_Mixing.py)
 
 These were implemented on the OT-2 due to existing lab infrastructure and consumables. The workflow is structured such that migration to Opentrons Flex would primarily involve hardware optimization rather than logical redesign.
 
@@ -36,15 +38,15 @@ Reduced operator-dependent variability
 
 This protocol is a strong candidate for migration to Opentrons Flex for improved performance and runtime efficiency.
 
-## 3. 16S Library Preparation – Zymo Quick-16S Full-Length Kit
+## 3. 16S Library Preparation – Zymo Quick-16S Full-Length Kit: 
 
-Automation of the Zymo Quick-16S Full-Length Library Prep Kit was developed in collaboration with Zymo Research.
+Automation of the Zymo Quick-16S Full-Length Library Prep Kit was developed in collaboration with Zymo Research: [Simple Library Prep Protocol](../protocols/Flex/Zymo_LibraryPrep_TG_V2.py)
 
-Additional custom automation steps were implemented to:
+Additional custom automation steps were implemented to
 
 Meet updated procedural recommendations
 
-Automate supplemental PCR product cleanup
+Automate supplemental PCR product cleanup: [Supplemetnal Cleanup Protocol](../protocols/Flex/SelectASizeCleaning.py)
 
 Enable processing of 96 samples prior to Take3 analysis
 
