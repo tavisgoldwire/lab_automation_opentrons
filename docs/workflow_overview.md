@@ -26,7 +26,7 @@ These were implemented on the OT-2 due to existing lab infrastructure and consum
 
 ## 2. DNA Cleanup – ZR-96 DNA Sequencing Clean-up Kit
 
-The ZR-96 cleanup workflow was automated on the OT-2 to improve reproducibility and throughput during bead-based purification steps.
+The ZR-96 cleanup workflow was automated on the OT-2 to improve reproducibility and throughput during bead-based purification steps: [ZR-96 Cleaning Protocol](../protocols/OT-2/FlexZR-96_Clean_Concentrate_v8.py)
 
 This stage emphasized:
 
