@@ -42,9 +42,5 @@ High-level stages (typical):
 
 See `docs/workflow_overview.md`.
 
-## Redaction / privacy
-This repo omits any sensitive sample identifiers and internal operational details.  
-See `docs/safety_and_redaction.md`.
-
 ## Attribution
 Protocols were developed collaboratively in a lab environment; this repository is a portfolio mirror containing sanitized versions authored primarily by Tavis Goldwire.
