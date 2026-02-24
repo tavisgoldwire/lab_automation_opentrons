@@ -43,4 +43,4 @@ High-level stages (typical):
 See `docs/workflow_overview.md`.
 
 ## Attribution
-Protocols were developed collaboratively in a lab environment; this repository is a portfolio mirror containing sanitized versions authored primarily by Tavis Goldwire.
+Protocols were developed collaboratively in a lab environment; this repository is a portfolio mirror containing sanitized versions authored and updated primarily by Tavis Goldwire.
