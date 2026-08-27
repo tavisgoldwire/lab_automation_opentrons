@@ -103,7 +103,7 @@ def run(ctx: protocol_api.ProtocolContext):
     # a new custom labware will need to be created with the specific measurements of the kit's Elution Plate. In
     # this example we are not using any spacer
 
-    tall_spacer = ctx.load_module("opentrons_vacuum_manifold_spacer_tall", "D2") #, "Opentrons Vacuum Tall Spacer"
+    tall_spacer = ctx.load_adapter("opentrons_vacuum_manifold_spacer_tall", "D2") #, "Opentrons Vacuum Tall Spacer" switched to load_adapter TG
     elution_plate = tall_spacer.load_labware("eppendorf_96_wellplate_150ul") #, 'Elution plate'
     # If using a spacer to increase the height of a plate inside the vacuum collar, the spacer needs to be loaded
     # as a module and the plate needs to be loaded on top of the spacer. In this example, we are loading the tall
