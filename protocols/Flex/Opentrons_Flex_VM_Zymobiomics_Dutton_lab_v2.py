@@ -102,7 +102,7 @@ requirements = {
 # =====================================================================
 # ELUTION_PLATE_LOADNAME is still a placeholder -- see PLACEHOLDERS above.
 FILTER_PLATE_LOADNAME = "zymo_96_spin_plate"  # custom def: custom_labware/zymo_96_spin_plate.json
-ELUTION_PLATE_LOADNAME = "eppendorf_96_wellplate_150ul"
+ELUTION_PLATE_LOADNAME = "elution_plate_placeholder"  # custom def: custom_labware/elution_plate_placeholder.json
 
 SAMPLE_PLATE_LOADNAME = "nest_96_wellplate_2ml_deep"
 RESERVOIR_LOADNAME = "nest_1_reservoir_195ml"
@@ -364,12 +364,17 @@ def run(ctx: protocol_api.ProtocolContext):
         FILTER_PLATE_LOADNAME, "Zymo-Spin I-96-Z Plate"
     )
 
-    # The elution plate rides on the tall spacer so the gripper can move
-    # both together.  Moving the spacer moves its contents.
-    # Lab-made 3D-printed part -- NOT an Opentrons product, hence the
-    # "custom_" prefix (custom_labware/custom_vacuum_manifold_spacer_tall.json).
-    tall_spacer = ctx.load_adapter("custom_vacuum_manifold_spacer_tall", "D2")
-    elution_plate = tall_spacer.load_labware(ELUTION_PLATE_LOADNAME)
+    # The physical spacer (custom_labware/custom_vacuum_manifold_spacer_tall.json
+    # documents its dimensions) is placed into the vacuum module by hand during
+    # deck setup and is NEVER touched by the robot -- Opentrons has no valid way
+    # to model "adapter stays behind, something else gets stacked where it is"
+    # (adapters can only be loaded directly on a slot/module, never on top of
+    # labware, and moving one with cargo on it requires "isMovableAdapter"; see
+    # STEP 6 below for the other stacking limits this ran into). So the spacer
+    # is not an Opentrons object at all here -- its 12.5mm of height is instead
+    # baked into elution_plate_placeholder.json's stackingOffsetWithModule for
+    # vacuumModuleV1, applied automatically once elution_plate lands there.
+    elution_plate = ctx.load_labware(ELUTION_PLATE_LOADNAME, "D2")
 
     binding_res = ctx.load_labware(RESERVOIR_LOADNAME, "B2", "DNA Binding Buffer")
     wash1_res = ctx.load_labware(RESERVOIR_LOADNAME, "B3", "DNA Wash Buffer 1")
@@ -597,21 +602,24 @@ def run(ctx: protocol_api.ProtocolContext):
 
     # Collar (carrying the filter plate) off to the dock at A4.
     ctx.move_labware(manifold_collar, vm_mod.manifold_dock, use_gripper=True)
-    # Spacer + elution plate together, as one gripped unit, onto the now-
-    # empty module. We can't model "spacer stays behind, collar rests on
-    # top of it" in the Opentrons API: load_adapter() only accepts a deck
-    # slot / staging slot / module as its location, never another labware
-    # or adapter, so the collar can't be stacked onto the spacer the way
-    # the spacer is stacked onto the module. The spacer therefore has to
-    # travel with whatever's already loaded on it (the elution plate) --
-    # which means its gripper offset needs to be calibrated before a real
-    # run, since it's a 3D-printed part with a different height than
-    # Opentrons' own adapters.
-    ctx.move_labware(tall_spacer, vm_mod, use_gripper=True)
+    # Elution plate straight onto the now-empty module. The spacer is
+    # already sitting there (placed by hand, never gripped) -- see the
+    # LABWARE section above -- so elution_plate lands at the height its
+    # stackingOffsetWithModule entry adds on top of vm_mod.
+    ctx.move_labware(elution_plate, vm_mod, use_gripper=True)
     # Filter plate onto the elution plate.
     ctx.move_labware(filter_plate, elution_plate, use_gripper=True)
-    # Collar back down over the stack.
-    ctx.move_labware(manifold_collar, vm_mod, use_gripper=True)
+    # Collar back down over the stack -- BY HAND. Opentrons has no valid
+    # move_labware() destination for this: the collar is an adapter, and
+    # adapters can only be placed on a slot/module/staging-slot, never on
+    # labware, so "onto filter_plate" is rejected outright; "onto vm_mod"
+    # is rejected too, since vm_mod's slot is already occupied by the
+    # elution_plate+filter_plate stack. Both were confirmed via simulation,
+    # not assumed.
+    ctx.pause(
+        f"Manually place the {ctx.params.collar.replace('_', ' ')} back over "
+        "the assembled stack on the vacuum module, then resume."
+    )
 
     # =================================================================
     # STEP 7 - ELUTION                       (kit manual step 13)
