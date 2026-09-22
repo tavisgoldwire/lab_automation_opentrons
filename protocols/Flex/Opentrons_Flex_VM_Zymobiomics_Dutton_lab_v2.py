@@ -31,10 +31,13 @@ ROBOT PERFORMS  (kit manual steps 6-13)
 ----------------------------------------------------------------------
 PLACEHOLDERS -- MUST BE RESOLVED BEFORE A REAL RUN
 
-  * FILTER_PLATE_LOADNAME and ELUTION_PLATE_LOADNAME are stand-in labware.
-    Custom definitions for the Zymo-Spin I-96-Z Plate and the kit Elution
-    Plate are required.  EVERY z-height in this file is provisional until
-    those exist, and ELUTION_DISPENSE_Z most of all.
+  * ELUTION_PLATE_LOADNAME is still stand-in labware (the kit Elution
+    Plate has no custom definition yet).  FILTER_PLATE_LOADNAME now points
+    at a real custom definition (custom_labware/zymo_96_spin_plate.json),
+    but that file's stackingOffsetWithLabware/gripperOffsets z-values are
+    provisional zeros, not measured -- verify before trusting exact
+    heights.  EVERY z-height in this file is provisional until the elution
+    plate is real too, and ELUTION_DISPENSE_Z most of all.
 
   * All FR_* flow rates are STARTING POINTS, not validated values.
     Before tuning, print the pipette defaults in simulation:
@@ -97,8 +100,8 @@ requirements = {
 # =====================================================================
 # LABWARE
 # =====================================================================
-# !! PLACEHOLDERS !!  Replace with custom definitions once created.
-FILTER_PLATE_LOADNAME = "thermoscientificnunc_96_wellplate_1000ul_filter"
+# ELUTION_PLATE_LOADNAME is still a placeholder -- see PLACEHOLDERS above.
+FILTER_PLATE_LOADNAME = "zymo_96_spin_plate"  # custom def: custom_labware/zymo_96_spin_plate.json
 ELUTION_PLATE_LOADNAME = "eppendorf_96_wellplate_150ul"
 
 SAMPLE_PLATE_LOADNAME = "nest_96_wellplate_2ml_deep"
@@ -363,7 +366,9 @@ def run(ctx: protocol_api.ProtocolContext):
 
     # The elution plate rides on the tall spacer so the gripper can move
     # both together.  Moving the spacer moves its contents.
-    tall_spacer = ctx.load_adapter("opentrons_vacuum_manifold_spacer_tall", "D2")
+    # Lab-made 3D-printed part -- NOT an Opentrons product, hence the
+    # "custom_" prefix (custom_labware/custom_vacuum_manifold_spacer_tall.json).
+    tall_spacer = ctx.load_adapter("custom_vacuum_manifold_spacer_tall", "D2")
     elution_plate = tall_spacer.load_labware(ELUTION_PLATE_LOADNAME)
 
     binding_res = ctx.load_labware(RESERVOIR_LOADNAME, "B2", "DNA Binding Buffer")
