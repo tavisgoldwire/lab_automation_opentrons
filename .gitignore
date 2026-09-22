@@ -6,4 +6,5 @@ __pycache__/
 *.tsv
 *.xlsx
 *.json
+!protocols/Flex/custom_labware/*.json
 .env

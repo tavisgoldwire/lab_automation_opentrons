@@ -1,0 +1,57 @@
+{
+  "ordering": [],
+  "brand": {
+    "brand": "Dutton Lab (custom, 3D-printed)",
+    "brandId": []
+  },
+  "metadata": {
+    "displayName": "Vacuum Manifold Spacer, Tall (custom)",
+    "displayCategory": "adapter",
+    "displayVolumeUnits": "\u00b5L",
+    "tags": []
+  },
+  "dimensions": {
+    "xDimension": 127.0,
+    "yDimension": 85.0,
+    "zDimension": 12.5
+  },
+  "wells": {},
+  "groups": [
+    {
+      "metadata": {},
+      "wells": []
+    }
+  ],
+  "parameters": {
+    "format": "96Standard",
+    "quirks": [],
+    "isTiprack": false,
+    "isMagneticModuleCompatible": false,
+    "loadName": "custom_vacuum_manifold_spacer_tall"
+  },
+  "namespace": "custom_beta",
+  "version": 1,
+  "schemaVersion": 2,
+  "allowedRoles": [
+    "adapter"
+  ],
+  "cornerOffsetFromSlot": {
+    "x": 0.38,
+    "y": 0.24,
+    "z": 0
+  },
+  "gripperOffsets": {
+    "default": {
+      "pickUpOffset": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "dropOffset": {
+        "x": 0,
+        "y": 0,
+        "z": 1.0
+      }
+    }
+  }
+}
