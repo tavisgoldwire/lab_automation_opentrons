@@ -110,6 +110,10 @@ ELUTION_PLATE_LOADNAME = "elution_plate_placeholder"  # custom def: custom_labwa
 CUSTOM_NAMESPACE = "custom_beta"
 CUSTOM_LABWARE_VERSION = 2
 
+# mm above the default grip point (half the spacer's height) at which the
+# gripper takes the spacer + elution plate. Tune on the robot.
+SPACER_GRIP_RAISE = 2.0
+
 SAMPLE_PLATE_LOADNAME = "nest_96_wellplate_2ml_deep"
 RESERVOIR_LOADNAME = "nest_1_reservoir_195ml"
 TIPRACK_LOADNAME = "opentrons_flex_96_tiprack_1000ul"
@@ -625,8 +629,15 @@ def run(ctx: protocol_api.ProtocolContext):
     # Collar (carrying the filter plate) off to the dock at A4.
     ctx.move_labware(manifold_collar, vm_mod.manifold_dock, use_gripper=True)
     # Spacer + elution plate together, as one gripped unit, onto the now-
-    # empty module (same as the reference protocol).
-    ctx.move_labware(tall_spacer, vm_mod, use_gripper=True)
+    # empty module (same as the reference protocol). Gripped SPACER_GRIP_RAISE
+    # higher than default -- at the default height the jaws clipped the
+    # manifold rim on the 2026-09-23 dry run. The same raise goes on the drop
+    # so the stack is set down at the normal height, not pushed lower.
+    raise_grip = {"x": 0, "y": 0, "z": SPACER_GRIP_RAISE}
+    ctx.move_labware(
+        tall_spacer, vm_mod, use_gripper=True,
+        pick_up_offset=raise_grip, drop_offset=raise_grip,
+    )
     # Filter plate onto the elution plate (allowed by the filterPlate quirk).
     ctx.move_labware(filter_plate, elution_plate, use_gripper=True)
     # Collar back down over the whole stack (same as the reference protocol).
