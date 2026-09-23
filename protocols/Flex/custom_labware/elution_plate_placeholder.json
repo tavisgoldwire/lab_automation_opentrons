@@ -128,7 +128,7 @@
     ]
   },
   "metadata": {
-    "displayName": "Elution Plate PLACEHOLDER (eppendorf_96_wellplate_150ul geometry, stand-in for real kit plate)",
+    "displayName": "Elution Plate (PLACEHOLDER - clone of eppendorf_96_wellplate_150ul, rides on custom_vacuum_manifold_spacer_tall)",
     "displayCategory": "wellPlate",
     "displayVolumeUnits": "\u00b5L",
     "tags": []
@@ -1210,8 +1210,7 @@
     "quirks": [],
     "isTiprack": false,
     "loadName": "elution_plate_placeholder",
-    "isMagneticModuleCompatible": false,
-    "isMovableAdapter": true
+    "isMagneticModuleCompatible": false
   },
   "namespace": "custom_beta",
   "version": 1,
@@ -1221,17 +1220,16 @@
     "y": 0,
     "z": 0
   },
-  "stackingOffsetWithLabware": {},
-  "stackingOffsetWithModule": {
-    "vacuumModuleV1": {
+  "stackingOffsetWithLabware": {
+    "custom_vacuum_manifold_spacer_tall": {
       "x": 0,
       "y": 0,
-      "z": 12.5
+      "z": 0
     }
   },
+  "stackingOffsetWithModule": {},
   "allowedRoles": [
-    "labware",
-    "adapter"
+    "labware"
   ],
   "gripperOffsets": {
     "default": {

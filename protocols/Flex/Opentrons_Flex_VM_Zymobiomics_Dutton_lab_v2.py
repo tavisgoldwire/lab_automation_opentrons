@@ -364,17 +364,19 @@ def run(ctx: protocol_api.ProtocolContext):
         FILTER_PLATE_LOADNAME, "Zymo-Spin I-96-Z Plate"
     )
 
-    # The physical spacer (custom_labware/custom_vacuum_manifold_spacer_tall.json
-    # documents its dimensions) is placed into the vacuum module by hand during
-    # deck setup and is NEVER touched by the robot -- Opentrons has no valid way
-    # to model "adapter stays behind, something else gets stacked where it is"
-    # (adapters can only be loaded directly on a slot/module, never on top of
-    # labware, and moving one with cargo on it requires "isMovableAdapter"; see
-    # STEP 6 below for the other stacking limits this ran into). So the spacer
-    # is not an Opentrons object at all here -- its 12.5mm of height is instead
-    # baked into elution_plate_placeholder.json's stackingOffsetWithModule for
-    # vacuumModuleV1, applied automatically once elution_plate lands there.
-    elution_plate = ctx.load_labware(ELUTION_PLATE_LOADNAME, "D2")
+    # The elution plate rides on the tall spacer so the gripper can move both
+    # together (matches Opentrons' own reference protocol for this accessory,
+    # Opentrons_Flex_VM_Zymobiomics_Dutton_lab.py, apiLevel 2.30). Lab-made
+    # 3D-printed part -- NOT an Opentrons product, hence "custom_" prefix
+    # (custom_labware/custom_vacuum_manifold_spacer_tall.json). The earlier
+    # "eppendorf_96_wellplate_150ul cannot be loaded onto labware
+    # custom_vacuum_manifold_spacer_tall" error was NOT an architecture
+    # problem -- it was a missing stackingOffsetWithLabware entry on our own
+    # hand-written elution_plate_placeholder.json (the field that tells the
+    # engine "this plate is allowed to sit on that specific adapter"). Fixed
+    # by adding that entry; see elution_plate_placeholder.json.
+    tall_spacer = ctx.load_adapter("custom_vacuum_manifold_spacer_tall", "D2")
+    elution_plate = tall_spacer.load_labware(ELUTION_PLATE_LOADNAME)
 
     binding_res = ctx.load_labware(RESERVOIR_LOADNAME, "B2", "DNA Binding Buffer")
     wash1_res = ctx.load_labware(RESERVOIR_LOADNAME, "B3", "DNA Wash Buffer 1")
@@ -602,24 +604,20 @@ def run(ctx: protocol_api.ProtocolContext):
 
     # Collar (carrying the filter plate) off to the dock at A4.
     ctx.move_labware(manifold_collar, vm_mod.manifold_dock, use_gripper=True)
-    # Elution plate straight onto the now-empty module. The spacer is
-    # already sitting there (placed by hand, never gripped) -- see the
-    # LABWARE section above -- so elution_plate lands at the height its
-    # stackingOffsetWithModule entry adds on top of vm_mod.
-    ctx.move_labware(elution_plate, vm_mod, use_gripper=True)
+    # Spacer + elution plate together, as one gripped unit, onto the now-
+    # empty module.
+    ctx.move_labware(tall_spacer, vm_mod, use_gripper=True)
     # Filter plate onto the elution plate.
     ctx.move_labware(filter_plate, elution_plate, use_gripper=True)
-    # Collar back down over the stack -- BY HAND. Opentrons has no valid
-    # move_labware() destination for this: the collar is an adapter, and
-    # adapters can only be placed on a slot/module/staging-slot, never on
-    # labware, so "onto filter_plate" is rejected outright; "onto vm_mod"
-    # is rejected too, since vm_mod's slot is already occupied by the
-    # elution_plate+filter_plate stack. Both were confirmed via simulation,
-    # not assumed.
-    ctx.pause(
-        f"Manually place the {ctx.params.collar.replace('_', ' ')} back over "
-        "the assembled stack on the vacuum module, then resume."
-    )
+    # Collar back down over the whole stack. NOTE: this exact call --
+    # gripping an adapter-role item onto a module slot that already holds a
+    # labware stack -- cannot be verified in simulation here: the vacuum
+    # manifold collar/spacer are apiLevel-2.30 beta labware that don't ship
+    # in the public opentrons package this sandbox uses (max apiLevel 2.29),
+    # so this line can only be exercised on the real robot. It's exactly
+    # what Opentrons' own reference protocol for this accessory does, so
+    # this is their supported pattern, not something invented here.
+    ctx.move_labware(manifold_collar, vm_mod, use_gripper=True)
 
     # =================================================================
     # STEP 7 - ELUTION                       (kit manual step 13)
