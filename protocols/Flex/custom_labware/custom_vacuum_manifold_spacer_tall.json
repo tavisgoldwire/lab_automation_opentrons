@@ -27,7 +27,8 @@
     "quirks": [],
     "isTiprack": false,
     "isMagneticModuleCompatible": false,
-    "loadName": "custom_vacuum_manifold_spacer_tall"
+    "loadName": "custom_vacuum_manifold_spacer_tall",
+    "isMovableAdapter": true
   },
   "namespace": "custom_beta",
   "version": 1,
