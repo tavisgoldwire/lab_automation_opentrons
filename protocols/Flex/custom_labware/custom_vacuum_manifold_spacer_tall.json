@@ -31,7 +31,7 @@
     "isMovableAdapter": true
   },
   "namespace": "custom_beta",
-  "version": 1,
+  "version": 2,
   "schemaVersion": 2,
   "allowedRoles": [
     "adapter"

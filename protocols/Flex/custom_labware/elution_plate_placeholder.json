@@ -1213,7 +1213,7 @@
     "isMagneticModuleCompatible": false
   },
   "namespace": "custom_beta",
-  "version": 1,
+  "version": 2,
   "schemaVersion": 2,
   "cornerOffsetFromSlot": {
     "x": 0,

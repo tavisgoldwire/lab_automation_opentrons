@@ -104,6 +104,12 @@ requirements = {
 FILTER_PLATE_LOADNAME = "zymo_96_spin_plate"  # custom def: custom_labware/zymo_96_spin_plate.json
 ELUTION_PLATE_LOADNAME = "elution_plate_placeholder"  # custom def: custom_labware/elution_plate_placeholder.json
 
+# Pinned so the robot can't silently fall back to an older imported copy of
+# a custom definition. Bump the "version" field in custom_labware/*.json and
+# this number together whenever a definition changes.
+CUSTOM_NAMESPACE = "custom_beta"
+CUSTOM_LABWARE_VERSION = 2
+
 SAMPLE_PLATE_LOADNAME = "nest_96_wellplate_2ml_deep"
 RESERVOIR_LOADNAME = "nest_1_reservoir_195ml"
 TIPRACK_LOADNAME = "opentrons_flex_96_tiprack_1000ul"
@@ -361,8 +367,18 @@ def run(ctx: protocol_api.ProtocolContext):
     )
 
     filter_plate = manifold_collar.load_labware(
-        FILTER_PLATE_LOADNAME, "Zymo-Spin I-96-Z Plate"
+        FILTER_PLATE_LOADNAME, "Zymo-Spin I-96-Z Plate",
+        namespace=CUSTOM_NAMESPACE, version=CUSTOM_LABWARE_VERSION,
     )
+    # Guard against a stale copy of the definition on the robot/App. Without
+    # the "filterPlate" quirk, STEP 6 fails with "cannot be loaded onto
+    # labware on top of adapter". Fail here, loudly, at analysis instead.
+    if "filterPlate" not in (filter_plate.parameters.get("quirks") or []):
+        raise RuntimeError(
+            "zymo_96_spin_plate definition loaded WITHOUT the filterPlate "
+            "quirk -- the robot/App is using a stale copy. Delete it in the "
+            "App's custom labware and re-import custom_labware/*.json."
+        )
 
     # Same stack as the Opentrons reference protocol: elution plate rides on
     # the tall spacer (adapter), and the gripper moves spacer + plate as one
@@ -373,8 +389,14 @@ def run(ctx: protocol_api.ProtocolContext):
     # labware on top of adapter" check. The stand-in plate
     # (thermoscientificnunc_96_wellplate_1000ul_filter) has that quirk,
     # which is why the reference never hit this error.
-    tall_spacer = ctx.load_adapter("custom_vacuum_manifold_spacer_tall", "D2")
-    elution_plate = tall_spacer.load_labware(ELUTION_PLATE_LOADNAME)
+    tall_spacer = ctx.load_adapter(
+        "custom_vacuum_manifold_spacer_tall", "D2",
+        namespace=CUSTOM_NAMESPACE, version=CUSTOM_LABWARE_VERSION,
+    )
+    elution_plate = tall_spacer.load_labware(
+        ELUTION_PLATE_LOADNAME,
+        namespace=CUSTOM_NAMESPACE, version=CUSTOM_LABWARE_VERSION,
+    )
 
     binding_res = ctx.load_labware(RESERVOIR_LOADNAME, "B2", "DNA Binding Buffer")
     wash1_res = ctx.load_labware(RESERVOIR_LOADNAME, "B3", "DNA Wash Buffer 1")

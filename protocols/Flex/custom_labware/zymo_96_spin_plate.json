@@ -1119,7 +1119,7 @@
     "loadName": "zymo_96_spin_plate"
   },
   "namespace": "custom_beta",
-  "version": 1,
+  "version": 2,
   "schemaVersion": 2,
   "cornerOffsetFromSlot": {
     "x": 0,
