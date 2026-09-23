@@ -364,17 +364,15 @@ def run(ctx: protocol_api.ProtocolContext):
         FILTER_PLATE_LOADNAME, "Zymo-Spin I-96-Z Plate"
     )
 
-    # The elution plate rides on the tall spacer so the gripper can move both
-    # together (matches Opentrons' own reference protocol for this accessory,
-    # Opentrons_Flex_VM_Zymobiomics_Dutton_lab.py, apiLevel 2.30). Lab-made
-    # 3D-printed part -- NOT an Opentrons product, hence "custom_" prefix
-    # (custom_labware/custom_vacuum_manifold_spacer_tall.json). The earlier
-    # "eppendorf_96_wellplate_150ul cannot be loaded onto labware
-    # custom_vacuum_manifold_spacer_tall" error was NOT an architecture
-    # problem -- it was a missing stackingOffsetWithLabware entry on our own
-    # hand-written elution_plate_placeholder.json (the field that tells the
-    # engine "this plate is allowed to sit on that specific adapter"). Fixed
-    # by adding that entry; see elution_plate_placeholder.json.
+    # Same stack as the Opentrons reference protocol: elution plate rides on
+    # the tall spacer (adapter), and the gripper moves spacer + plate as one
+    # unit onto the module in STEP 6. The filter plate is then stacked on the
+    # elution plate. That filter-on-plate-on-adapter stack is ONLY legal
+    # because zymo_96_spin_plate.json carries the "filterPlate" quirk --
+    # the engine exempts filter plates from its "cannot be loaded onto
+    # labware on top of adapter" check. The stand-in plate
+    # (thermoscientificnunc_96_wellplate_1000ul_filter) has that quirk,
+    # which is why the reference never hit this error.
     tall_spacer = ctx.load_adapter("custom_vacuum_manifold_spacer_tall", "D2")
     elution_plate = tall_spacer.load_labware(ELUTION_PLATE_LOADNAME)
 
@@ -605,18 +603,11 @@ def run(ctx: protocol_api.ProtocolContext):
     # Collar (carrying the filter plate) off to the dock at A4.
     ctx.move_labware(manifold_collar, vm_mod.manifold_dock, use_gripper=True)
     # Spacer + elution plate together, as one gripped unit, onto the now-
-    # empty module.
+    # empty module (same as the reference protocol).
     ctx.move_labware(tall_spacer, vm_mod, use_gripper=True)
-    # Filter plate onto the elution plate.
+    # Filter plate onto the elution plate (allowed by the filterPlate quirk).
     ctx.move_labware(filter_plate, elution_plate, use_gripper=True)
-    # Collar back down over the whole stack. NOTE: this exact call --
-    # gripping an adapter-role item onto a module slot that already holds a
-    # labware stack -- cannot be verified in simulation here: the vacuum
-    # manifold collar/spacer are apiLevel-2.30 beta labware that don't ship
-    # in the public opentrons package this sandbox uses (max apiLevel 2.29),
-    # so this line can only be exercised on the real robot. It's exactly
-    # what Opentrons' own reference protocol for this accessory does, so
-    # this is their supported pattern, not something invented here.
+    # Collar back down over the whole stack (same as the reference protocol).
     ctx.move_labware(manifold_collar, vm_mod, use_gripper=True)
 
     # =================================================================

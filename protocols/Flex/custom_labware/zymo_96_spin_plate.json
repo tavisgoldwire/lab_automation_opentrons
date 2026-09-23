@@ -1111,7 +1111,9 @@
   ],
   "parameters": {
     "format": "irregular",
-    "quirks": [],
+    "quirks": [
+      "filterPlate"
+    ],
     "isTiprack": false,
     "isMagneticModuleCompatible": false,
     "loadName": "zymo_96_spin_plate"
