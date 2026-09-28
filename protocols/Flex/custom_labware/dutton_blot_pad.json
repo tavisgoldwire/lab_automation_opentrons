@@ -1,0 +1,77 @@
+{
+  "ordering": [
+    [
+      "A1"
+    ]
+  ],
+  "brand": {
+    "brand": "Dutton Lab (custom)",
+    "brandId": []
+  },
+  "metadata": {
+    "displayName": "Blot Pad - paper towel on flat tray (custom)",
+    "displayCategory": "reservoir",
+    "displayVolumeUnits": "\u00b5L",
+    "tags": []
+  },
+  "dimensions": {
+    "xDimension": 127.76,
+    "yDimension": 85.48,
+    "zDimension": 15.0
+  },
+  "wells": {
+    "A1": {
+      "shape": "rectangular",
+      "depth": 1.0,
+      "xDimension": 120.0,
+      "yDimension": 80.0,
+      "totalLiquidVolume": 1,
+      "x": 63.88,
+      "y": 42.74,
+      "z": 14.0
+    }
+  },
+  "groups": [
+    {
+      "metadata": {
+        "wellBottomShape": "flat"
+      },
+      "wells": [
+        "A1"
+      ]
+    }
+  ],
+  "parameters": {
+    "format": "irregular",
+    "quirks": [],
+    "isTiprack": false,
+    "isMagneticModuleCompatible": false,
+    "loadName": "dutton_blot_pad"
+  },
+  "namespace": "custom_beta",
+  "version": 3,
+  "schemaVersion": 2,
+  "cornerOffsetFromSlot": {
+    "x": 0,
+    "y": 0,
+    "z": 0
+  },
+  "stackingOffsetWithLabware": {},
+  "gripperOffsets": {
+    "default": {
+      "pickUpOffset": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "dropOffset": {
+        "x": 0,
+        "y": 0,
+        "z": 1.0
+      }
+    }
+  },
+  "allowedRoles": [
+    "labware"
+  ]
+}

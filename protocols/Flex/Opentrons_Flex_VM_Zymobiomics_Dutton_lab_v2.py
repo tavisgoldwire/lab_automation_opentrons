@@ -17,6 +17,9 @@ OPERATOR PREPARES OFF-DECK
      section.  Kit manual step 14 (HRC inhibitor removal) is run by
      centrifuge AFTER this protocol finishes.  It is deliberately NOT
      automated here -- do not skip the chemistry, only the automation.
+  5. Put a fresh, DRY blot pad (folded paper towel on its flat tray) in
+     staging slot B4.  Use a new pad every run -- a wet pad wicks liquid
+     sideways between neighbouring tips.
 
 ROBOT PERFORMS  (kit manual steps 6-13)
   1. Add 1200 uL DNA Binding Buffer to each well (2 x 600 uL), then mix.
@@ -25,8 +28,11 @@ ROBOT PERFORMS  (kit manual steps 6-13)
   4. 700 uL DNA Wash Buffer 2, vacuum.
   5. 200 uL DNA Wash Buffer 2, vacuum.
   6. Extended vacuum to dry the membranes.
-  7. Gripper repositions the filter plate over the Elution Plate.
-  8. Add elution water, incubate, vacuum into the Elution Plate.
+  7. Gripper blots the underside of the filter plate on the pad in B4
+     (removes the Wash 2 film/drops that vacuum leaves under the plate,
+     so it can't carry ethanol into the eluate).  Runtime parameter.
+  8. Gripper repositions the filter plate over the Elution Plate.
+  9. Add elution water, incubate, vacuum into the Elution Plate.
 
 ----------------------------------------------------------------------
 PLACEHOLDERS -- MUST BE RESOLVED BEFORE A REAL RUN
@@ -38,6 +44,12 @@ PLACEHOLDERS -- MUST BE RESOLVED BEFORE A REAL RUN
     provisional zeros, not measured -- verify before trusting exact
     heights.  EVERY z-height in this file is provisional until the elution
     plate is real too, and ELUTION_DISPENSE_Z most of all.
+
+  * Blot pad height is a PLACEHOLDER: dutton_blot_pad.json zDimension
+    (15 mm) must be re-measured as deck surface -> top of the DRY towel
+    stack.  The filter plate's stacking offset on the pad (z=0) is also
+    unmeasured.  Tune contact with BLOT_DROP_Z on a water run: afterwards
+    all 96 tip marks should be visible on the towel, not just the corners.
 
   * All FR_* flow rates are STARTING POINTS, not validated values.
     Before tuning, print the pipette defaults in simulation:
@@ -108,11 +120,27 @@ ELUTION_PLATE_LOADNAME = "elution_plate_placeholder"  # custom def: custom_labwa
 # a custom definition. Bump the "version" field in custom_labware/*.json and
 # this number together whenever a definition changes.
 CUSTOM_NAMESPACE = "custom_beta"
-CUSTOM_LABWARE_VERSION = 2
+CUSTOM_LABWARE_VERSION = 3
 
 # mm above the default grip point (half the spacer's height) at which the
 # gripper takes the spacer + elution plate. Tune on the robot.
 SPACER_GRIP_RAISE = 2.0
+
+# --- Blot step (before elution) --------------------------------------
+# The vacuum can't clear liquid sitting on the underside of the plate --
+# airflow only runs through the columns.  So the gripper sets the plate
+# down on an absorbent pad, lets it wick, then carries on to the elution
+# plate.  Recommended by Opentrons.
+BLOT_PAD_LOADNAME = "dutton_blot_pad"  # custom def: custom_labware/dutton_blot_pad.json
+BLOT_SLOT = "B4"   # staging slot: must be enabled in the deck configuration
+                   # (A4 = manifold dock, C4 = spare tips, D4 blocked by chute)
+BLOT_CONTACT_S = 10  # seconds on the pad so the towel can wick
+# Added to the plate definition's own dropOffset (+1.0 mm).  0.0 releases the
+# plate 1 mm above its defined resting height and lets it settle by gravity.
+# -1.0 sets it down exactly at the defined height; more negative pushes the
+# plate into the towel.  Go in -0.5 mm steps -- too far and the jaws slip on
+# the plate or the gantry stalls.
+BLOT_DROP_Z = 0.0
 
 SAMPLE_PLATE_LOADNAME = "nest_96_wellplate_2ml_deep"
 RESERVOIR_LOADNAME = "nest_1_reservoir_195ml"
@@ -167,10 +195,10 @@ FR_LYSATE_ASP = 100         # slow: avoid resuspending settled debris
 FR_LYSATE_DISP = 120        # slow onto the membrane: avoid channeling
 FR_WASH_ASP = 150
 FR_WASH_DISP = 180
-FR_WATER_ASP = 50
-FR_WATER_DISP = 50
+FR_WATER_ASP = 20           # elution is the critical step: go slow
+FR_WATER_DISP = 10          # slow onto the membrane so it wets evenly
 FR_BLOWOUT = 100
-FR_ELUTION_BLOWOUT = 20     # low: a hard blow-out at the membrane splashes
+FR_ELUTION_BLOWOUT = 10     # low: a hard blow-out at the membrane splashes
 
 # Viscous liquids keep entering the tip after the plunger stops.  Moving
 # immediately leaves the tip short.  Applies to Binding Buffer and lysate.
@@ -183,12 +211,14 @@ AIR_GAP = 20
 AIR_GAP_ELUTION = 10
 
 # --- Z heights (mm above well bottom unless noted) -------------------
-RESERVOIR_ASP_Z = 0.5       # not the lowest possible: bottom(z=0) is the
-                            # DEFINED floor, and calibration error there
-                            # presses the tip into plastic and occludes it
-SAMPLE_ASP_Z_FIRST = 8.0    # 1600 uL in the deep block sits ~33 mm high
-SAMPLE_ASP_Z_SECOND = 1.5   # second 800 uL draw takes the well to empty
-MIX_ASP_Z = 2.0             # aspirate low, dispense high: this turns the
+# All aspirations at the well bottom -- higher values left most of the
+# reagent behind on the 2026-09-23 run. Same as the reference protocol's
+# .bottom(). If a tip seals against the plastic, fix it with Labware
+# Position Check, not by raising these.
+RESERVOIR_ASP_Z = 0.0
+SAMPLE_ASP_Z_FIRST = 0.0
+SAMPLE_ASP_Z_SECOND = 0.0
+MIX_ASP_Z = 0.0             # aspirate low, dispense high: this turns the
 MIX_DISP_Z = 12.0           # well over.  Oscillating at one height (as
                             # the original draft did) does not mix.
 DISPENSE_ABOVE_Z = -5.0     # relative to well TOP, non-contact dispense
@@ -204,6 +234,15 @@ ELUTION_DISPENSE_Z = 3.0    # !! PLACEHOLDER !! must be re-measured against
 # do not trade mixing quality for it.
 MIX_REPS = 6
 MIX_VOLUME = 900            # ~56% turnover of the 1600 uL well per cycle
+
+
+# VACUUM SETTINGS (validated on this robot, 2026-09-23):
+#   -350 mbar target (seal actually reaches ~ -320) for 210 s (3.5 min)
+#   fully drained the spin plate. That is the MINIMUM for every vacuum
+#   step, so the parameter ranges below won't allow anything weaker or
+#   shorter. The drying and elution steps default longer than that.
+# Stronger than -350 is allowed but only helps if the collar seal improves
+# (measured max: ~ -300 to -320 with the filter plate in the collar).
 
 
 def add_parameters(parameters: ParameterContext):
@@ -244,19 +283,19 @@ def add_parameters(parameters: ParameterContext):
         variable_name="vacuum_pressure",
         display_name="Vacuum Pressure (mbar)",
         description="Vacuum pressure for buffer pull-through. Negative.",
-        default=-500,
+        default=-350,
         minimum=-800,
-        maximum=-100,
+        maximum=-350,
         unit="mbar",
     )
 
     parameters.add_int(
         variable_name="vacuum_time",
         display_name="Vacuum Duration (s)",
-        description="Duration of each buffer pull-through.",
-        default=60,
-        minimum=10,
-        maximum=600,
+        description="Duration of each lysate/wash pull-through.",
+        default=210,
+        minimum=210,
+        maximum=900,
         unit="s",
     )
 
@@ -264,9 +303,9 @@ def add_parameters(parameters: ParameterContext):
         variable_name="dry_pressure",
         display_name="Membrane Dry Pressure (mbar)",
         description="Vacuum pressure for the membrane drying step.",
-        default=-800,
+        default=-350,
         minimum=-800,
-        maximum=-300,
+        maximum=-350,
         unit="mbar",
     )
 
@@ -278,8 +317,8 @@ def add_parameters(parameters: ParameterContext):
         variable_name="dry_time",
         display_name="Membrane Dry Duration (s)",
         description="Extended vacuum to dry membranes (see comment above).",
-        default=300,
-        minimum=60,
+        default=600,
+        minimum=210,
         maximum=900,
         unit="s",
     )
@@ -294,12 +333,39 @@ def add_parameters(parameters: ParameterContext):
         unit="s",
     )
 
+    parameters.add_int(
+        variable_name="elution_vacuum_pressure",
+        display_name="Elution Vacuum Pressure (mbar)",
+        description="Vacuum pressure for the final elution pull-through.",
+        default=-350,
+        minimum=-800,
+        maximum=-350,
+        unit="mbar",
+    )
+
+    parameters.add_int(
+        variable_name="elution_vacuum_time",
+        display_name="Elution Vacuum Duration (s)",
+        description="Duration of the final elution pull-through.",
+        default=240,
+        minimum=210,
+        maximum=900,
+        unit="s",
+    )
+
+    parameters.add_bool(
+        variable_name="blot_plate",
+        display_name="Blot Filter Plate",
+        description="Dab plate underside on the B4 pad before elution.",
+        default=True,
+    )
+
     # For deck/motion checks only -- do not use with real samples. (Kept
     # as a comment: Opentrons caps descriptions at 100 characters.)
     parameters.add_bool(
         variable_name="dry_run",
         display_name="Dry Run",
-        description="Skip incubations, shorten vacuum. Not for real samples.",
+        description="Skip pauses/incubations, return tips. Vacuums run full length.",
         default=False,
     )
 
@@ -331,11 +397,14 @@ def run(ctx: protocol_api.ProtocolContext):
     dry_pressure = int(ctx.params.dry_pressure)
     dry_time = int(ctx.params.dry_time)
     elution_incubation = int(ctx.params.elution_incubation)
+    elution_vac_pressure = int(ctx.params.elution_vacuum_pressure)
+    elution_vac_time = int(ctx.params.elution_vacuum_time)
     dry_run = bool(ctx.params.dry_run)
+    blot = bool(ctx.params.blot_plate)
 
+    # Dry run no longer shortens the vacuums: a 5 s vacuum can't pull liquid
+    # through, which makes a water test run meaningless.
     if dry_run:
-        vac_time = 5
-        dry_time = 5
         elution_incubation = 0
 
     def hold(seconds):
@@ -431,6 +500,15 @@ def run(ctx: protocol_api.ProtocolContext):
         "Spare tip rack, staged for gripper reload before elution",
     )
 
+    # Only loaded when blotting, so B4 doesn't have to be configured
+    # otherwise.
+    blot_pad = None
+    if blot:
+        blot_pad = ctx.load_labware(
+            BLOT_PAD_LOADNAME, BLOT_SLOT, "Blot pad (fresh, dry)",
+            namespace=CUSTOM_NAMESPACE, version=CUSTOM_LABWARE_VERSION,
+        )
+
     # -----------------------------------------------------------------
     # PIPETTE
     # -----------------------------------------------------------------
@@ -502,15 +580,19 @@ def run(ctx: protocol_api.ProtocolContext):
     ctx.comment(f"  Elution volume: {elution_volume:.0f} uL per well")
     ctx.comment(f"  Vacuum: {vac_pressure} mbar for {vac_time} s per step")
     ctx.comment(f"  Membrane dry: {dry_pressure} mbar for {dry_time} s")
+    if blot:
+        ctx.comment(f"  Blot: filter plate on pad in {BLOT_SLOT} for {BLOT_CONTACT_S} s")
+    ctx.comment(f"  Elution vacuum: {elution_vac_pressure} mbar for {elution_vac_time} s")
     if dry_run:
-        ctx.comment("  *** DRY RUN - delays skipped, vacuum shortened ***")
+        ctx.comment("  *** DRY RUN - pauses/incubations skipped, tips returned ***")
     ctx.comment("=" * 68)
 
     if not dry_run:
+        pad_note = f" a fresh DRY blot pad in {BLOT_SLOT}," if blot else ""
         ctx.pause(
             "Confirm reagent volumes poured as listed above, sample plate "
-            "loaded in A2, and the Silicon-A-HRC Plate prepared for the "
-            "off-deck step after this run."
+            f"loaded in A2,{pad_note} and the Silicon-A-HRC Plate prepared "
+            "for the off-deck step after this run."
         )
 
     # =================================================================
@@ -628,6 +710,17 @@ def run(ctx: protocol_api.ProtocolContext):
 
     # Collar (carrying the filter plate) off to the dock at A4.
     ctx.move_labware(manifold_collar, vm_mod.manifold_dock, use_gripper=True)
+
+    # Blot: lift the filter plate out of the docked collar and set it on the
+    # pad so the towel wicks off what's hanging under the plate.  One contact
+    # only -- lifting and re-setting on the same (now wet) spot re-wets tips.
+    if blot:
+        ctx.comment(f">> Blotting filter plate on the pad in {BLOT_SLOT}")
+        ctx.move_labware(
+            filter_plate, blot_pad, use_gripper=True,
+            drop_offset={"x": 0, "y": 0, "z": BLOT_DROP_Z},
+        )
+        hold(BLOT_CONTACT_S)
     # Spacer + elution plate together, as one gripped unit, onto the now-
     # empty module (same as the reference protocol). Gripped SPACER_GRIP_RAISE
     # higher than default -- at the default height the jaws clipped the
@@ -638,7 +731,8 @@ def run(ctx: protocol_api.ProtocolContext):
         tall_spacer, vm_mod, use_gripper=True,
         pick_up_offset=raise_grip, drop_offset=raise_grip,
     )
-    # Filter plate onto the elution plate (allowed by the filterPlate quirk).
+    # Filter plate (from the pad, or straight from the docked collar if not
+    # blotting) onto the elution plate (allowed by the filterPlate quirk).
     ctx.move_labware(filter_plate, elution_plate, use_gripper=True)
     # Collar back down over the whole stack (same as the reference protocol).
     ctx.move_labware(manifold_collar, vm_mod, use_gripper=True)
@@ -662,7 +756,7 @@ def run(ctx: protocol_api.ProtocolContext):
     finish_tip(pip)
 
     hold(elution_incubation)
-    vacuum(ctx, vm_mod, vac_pressure, vac_time)
+    vacuum(ctx, vm_mod, elution_vac_pressure, elution_vac_time)
 
     # =================================================================
     # DONE

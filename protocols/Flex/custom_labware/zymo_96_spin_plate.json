@@ -1119,7 +1119,7 @@
     "loadName": "zymo_96_spin_plate"
   },
   "namespace": "custom_beta",
-  "version": 2,
+  "version": 3,
   "schemaVersion": 2,
   "cornerOffsetFromSlot": {
     "x": 0,
@@ -1138,6 +1138,11 @@
       "z": 0
     },
     "elution_plate_placeholder": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "dutton_blot_pad": {
       "x": 0,
       "y": 0,
       "z": 0
