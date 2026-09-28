@@ -124,7 +124,7 @@ CUSTOM_LABWARE_VERSION = 3
 
 # mm above the default grip point (half the spacer's height) at which the
 # gripper takes the spacer + elution plate. Tune on the robot.
-SPACER_GRIP_RAISE = 2.0
+SPACER_GRIP_RAISE = 4.0
 
 # --- Blot step (before elution) --------------------------------------
 # The vacuum can't clear liquid sitting on the underside of the plate --
