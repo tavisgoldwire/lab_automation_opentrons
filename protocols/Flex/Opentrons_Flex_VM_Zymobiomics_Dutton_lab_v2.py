@@ -143,7 +143,7 @@ BLOT_CONTACT_S = 10  # seconds on the pad so the towel can wick
 BLOT_DROP_Z = 0.0
 
 SAMPLE_PLATE_LOADNAME = "nest_96_wellplate_2ml_deep"
-RESERVOIR_LOADNAME = "nest_1_reservoir_195ml"
+RESERVOIR_LOADNAME = "nest_1_reservoir_290ml"
 TIPRACK_LOADNAME = "opentrons_flex_96_tiprack_1000ul"
 
 # nest_1_reservoir_195ml, well A1 footprint, from the Opentrons labware
