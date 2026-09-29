@@ -2,7 +2,7 @@
 ZymoBIOMICS 96 DNA Kit on the Opentrons Flex + Vacuum Module (Dutton lab V3).
 
 Deck
-  A1 B1 D1  1000 uL tip racks on 96 adapters     C4  spare tip rack (elution)
+  A1 B1 D1  1000 uL tip racks on 96 adapters     C4  50 uL tip rack (elution)
   A2        sample plate, 400 uL lysate/well     B4  paper towel (blot, optional)
   B2 B3     Binding Buffer, Wash Buffer 1        A3  vacuum module + tall collar + spin plate
   C2 C3     Wash Buffer 2, water                 D2  tall spacer + elution plate
@@ -25,6 +25,7 @@ requirements = {"robotType": "Flex", "apiLevel": "2.30"}
 CUSTOM = {"namespace": "custom_beta", "version": 3}
 RESERVOIR = "nest_1_reservoir_290ml"
 TIPRACK = "opentrons_flex_96_tiprack_1000ul"
+ELUTION_TIPRACK = "opentrons_flex_96_tiprack_50ul"
 
 # Volumes, uL per well
 BINDING_VOL = 600           # added twice
@@ -33,8 +34,7 @@ WASH1_VOL = 400
 WASH2_VOLS = (700, 200)
 MIX_VOL = 900
 MIX_REPS = 6
-AIR_GAP = 20
-ELUTION_AIR_GAP = 10
+AIR_GAP = 20                # not used at elution: 50 uL tips have no room for one
 
 # Flow rates, uL/s per channel: (aspirate, dispense)
 RATES = {
@@ -47,18 +47,19 @@ RATES = {
 BLOWOUT_RATE = 100
 ELUTION_BLOWOUT_RATE = 10
 VISCOUS_DELAY_S = 2
+BLOWOUT_DELAY_S = 2         # after dispensing into the spin plate, before blowing out
 
 # Heights, mm
-ASP_Z = 0.1                 # above well bottom, every aspiration
+ASP_Z = 0.2                 # above well bottom, every aspiration
 MIX_DISP_Z = 12             # above well bottom
 TOP_Z = -5                  # below well top, non-contact dispense
-ELUTION_Z = 3               # above spin-column bottom
+ELUTION_Z = 4               # above spin-column bottom
 
 # Gripper
-SPACER_GRIP_RAISE = 4       # mm above default grip, clears the manifold rim
+SPACER_GRIP_RAISE = 5       # mm above default grip, clears the manifold rim
 GRIP_FORCE = 15             # N (Opentrons default for labware)
 TRAVEL_Z = 150              # gripper jaw height while carrying the plate to the towel (homes at ~166)
-BLOT_Z = 1.0                # plate bottom above the B4 surface at contact; lower in 0.5 mm steps
+BLOT_Z = 1.5                # plate bottom above the B4 surface at contact; lower in 0.5 mm steps
 BLOT_SPEED = 10             # mm/s, descent onto and lift off the towel
 BLOT_CONTACT_S = 10
 
@@ -86,9 +87,10 @@ def add_parameters(p: protocol_api.ParameterContext):
     p.add_float(
         variable_name="elution_volume",
         display_name="Elution Volume",
+        description="Water per well, delivered with 50 uL tips.",
         default=50.0,
         minimum=20.0,
-        maximum=100.0,
+        maximum=50.0,
         unit="uL",
     )
     p.add_int(
@@ -138,7 +140,7 @@ def run(ctx: protocol_api.ProtocolContext):
 
     tip_adapters = {s: ctx.load_adapter("opentrons_flex_96_tiprack_adapter", s) for s in ("A1", "B1", "D1")}
     racks = [adapter.load_labware(TIPRACK) for adapter in tip_adapters.values()]
-    spare_tips = ctx.load_labware(TIPRACK, "C4", "Spare tips for elution")
+    elution_tips = ctx.load_labware(ELUTION_TIPRACK, "C4", "50 uL tips for elution")
     pad = ctx.load_labware("dutton_blot_pad", "B4", "Blot towel", **CUSTOM) if p.blot else None
 
     pip = ctx.load_instrument("flex_96channel_1000", "left", tip_racks=racks)  # full pickup: A1 = whole plate
@@ -184,6 +186,8 @@ def run(ctx: protocol_api.ProtocolContext):
             hold(VISCOUS_DELAY_S)
         pip.air_gap(AIR_GAP)
         pip.dispense(volume + AIR_GAP, dest.top(TOP_Z))
+        if dest.parent is spin_plate:
+            hold(BLOWOUT_DELAY_S)
         pip.blow_out(dest.top(TOP_Z))
 
     def blot():
@@ -251,7 +255,7 @@ def run(ctx: protocol_api.ProtocolContext):
 
     # ---------------- 5. Swap tips, blot, stack for elution ----------------
     ctx.move_labware(racks[-1], chute, use_gripper=True)
-    ctx.move_labware(spare_tips, tip_adapters["D1"], use_gripper=True)
+    ctx.move_labware(elution_tips, tip_adapters["D1"], use_gripper=True)
 
     ctx.move_labware(collar, vm.manifold_dock, use_gripper=True)
     if pad:
@@ -262,12 +266,12 @@ def run(ctx: protocol_api.ProtocolContext):
     ctx.move_labware(collar, vm, use_gripper=True)
 
     # ---------------- 6. Elution ----------------
-    pip.pick_up_tip(spare_tips["A1"])
+    pip.pick_up_tip(elution_tips["A1"])
     set_rates("water")
     pip.flow_rate.blow_out = ELUTION_BLOWOUT_RATE
     pip.aspirate(p.elution_volume, water.bottom(ASP_Z))
-    pip.air_gap(ELUTION_AIR_GAP)
-    pip.dispense(p.elution_volume + ELUTION_AIR_GAP, spin_plate["A1"].bottom(ELUTION_Z))
+    pip.dispense(p.elution_volume, spin_plate["A1"].bottom(ELUTION_Z))
+    hold(BLOWOUT_DELAY_S)
     pip.blow_out(spin_plate["A1"].bottom(ELUTION_Z))
     discard_tip()
 
