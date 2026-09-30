@@ -50,7 +50,7 @@ VISCOUS_DELAY_S = 2
 BLOWOUT_DELAY_S = 5         # after dispensing into the spin plate, before blowing out
 
 # Heights, mm
-ASP_Z = 0.2                 # above well bottom, every 1000 uL tip aspiration
+ASP_Z = 0.75                 # above well bottom, every 1000 uL tip aspiration
 ELUTION_ASP_Z = 0.4         # water draw with the 50 uL tips (0.2 sealed them on the trough floor)
 MIX_DISP_Z = 12             # above well bottom
 TOP_Z = -5                  # below well top, non-contact dispense
