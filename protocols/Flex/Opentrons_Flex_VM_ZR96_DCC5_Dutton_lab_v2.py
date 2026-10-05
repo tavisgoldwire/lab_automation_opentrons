@@ -5,16 +5,19 @@ vacuum helper, blot, and elution-plate swap.
 
 Deck
   A1        1000 uL tips (bind + load)        A3  vacuum module + tall collar + spin plate
-  B1        1000 uL tips (washes)             D2  tall spacer + elution plate
-  D1        50 uL tips (elution)              B4  paper towel (blot, optional)
-  A2        PCR plate, DNA samples            D3  waste chute
-  B2 B3 C3  Binding Buffer, Wash Buffer, water
-  (all three tip racks sit on 96-tip adapters; C1, C2 empty)
+  B1        1000 uL tips (washes)             D2  tall spacer + empty elution plate (output)
+  D1        50 uL tips (sample transfer)      C4  50 uL tips (elution), gripper moves to D1
+  C2        samples, in the elution plate from the extraction protocol
+  A2        empty 2 mL deep-well plate (mixing)   B4  paper towel (blot, optional)
+  B2 B3 C3  Binding Buffer, Wash Buffer, water    D3  waste chute
+  (A1, B1, D1 racks sit on 96-tip adapters; C1 empty)
 
 Kit steps -> protocol
-  1  Binding Buffer into the sample wells, mix          (kit: vortex)
-  2-3 Load spin plate under gentle vacuum, then pull    (kit: 5 min spin)
+  0  Samples: elution plate -> deep-well plate (50 uL tips), rack swap by gripper
+  1  Binding Buffer onto the samples, mix               (kit: vortex)
+  2-3 Load spin plate under vacuum, then pull           (kit: 5 min spin)
   4  300 uL wash, vacuum, 300 uL wash, vacuum, dry      (kit: 5 min + 15 min spins)
+  5  Blot, stack on elution plate, water, vacuum elute  (kit: 3 min spin)
 
 Wall contact (v2)
   Binding Buffer leaves salt wherever it touches, so it goes in low and slowly with the vacuum
@@ -22,7 +25,6 @@ Wall contact (v2)
   The washes go in with the vacuum OFF so they pool above that salt line and rinse it,
   dispensed just above their own pooled level instead of from the top of the well.
   Elution water goes in low with the vacuum off and soaks before the pull.
-  5  Blot, stack on elution plate, water, vacuum elute  (kit: 3 min spin)
 """
 
 from opentrons import protocol_api, types
@@ -38,13 +40,12 @@ requirements = {"robotType": "Flex", "apiLevel": "2.30"}
 # Labware
 CUSTOM = {"namespace": "custom_beta", "version": 3}
 RESERVOIR = "nest_1_reservoir_290ml"
-SAMPLE_PLATE = "opentrons_96_wellplate_200ul_pcr_full_skirt"
+MIX_PLATE = "nest_96_wellplate_2ml_deep"
 TIPRACK = "opentrons_flex_96_tiprack_1000ul"
 ELUTION_TIPRACK = "opentrons_flex_96_tiprack_50ul"
 
 # Volumes, uL per well
 MIN_BINDING_VOL = 100       # kit footnote 1: at least 100 uL Binding Buffer for samples <= 50 uL
-PCR_WELL_MAX = 180          # sample + binding must fit the 200 uL PCR well with room to mix
 WASH_VOL = 300              # kit step 4, done twice
 MIX_REPS = 10
 AIR_GAP = 20                # not used at elution: 50 uL tips have no room for one
@@ -52,6 +53,7 @@ TROUGH_MARGIN = 35_000      # fill = use + this. Matches the ~35-40 mL overage i
 
 # Flow rates, uL/s per channel: (aspirate, dispense)
 RATES = {
+    "sample": (10, 20),     # 50 uL tips out of the conical elution-plate wells
     "binding": (80, 80),
     "mix": (100, 100),
     "load": (60, 15),       # dispense slower than the membrane drains under load vacuum
@@ -67,17 +69,24 @@ BLOWOUT_DELAY_S = 5         # after dispensing into the spin plate, before blowi
 # Heights, mm
 ASP_Z = 1.0                 # above well bottom, every 1000 uL tip aspiration (0.2 tripped overpressure, v6)
 ELUTION_ASP_Z = 0.4         # water draw with the 50 uL tips (0.2 sealed them on the trough floor)
-PCR_TOP_Z = -2              # below PCR well top, Binding Buffer dispense
-MIX_DISP_Z = 4              # above PCR well bottom
+SAMPLE_ASP_Z = 0.8          # 50 uL tips in the sample elution plate (conical). NOT dry-run tested
+SAMPLE_DISP_Z = 1.0         # into the empty deep well, so the sample lands on the bottom
+LOAD_ASP_Z = 0.5            # final draw from the deep well. Its pyramid bottom holds ~17 uL below 1.0 mm
+                            # (>10% of a 150 uL load) but ~6 uL below 0.5 mm. NOT dry-run tested
+DEEP_TOP_Z = -5             # below deep-well top, Binding Buffer dispense (non-contact)
+MIX_DISP_Z = 3              # above deep-well bottom; 150-400 uL sits only a few mm deep
 # Spin-plate heights all hang off MEMBRANE_Z, so one measurement sets every dispense.
-MEMBRANE_Z = 2              # UNMEASURED. Membrane surface above zymo_96_spin_plate.json's well bottom
-                            # (the definition puts that at the lowest point of the plate, likely the nozzle
-                            # tip). 2 reproduces v1's ELUTION_Z of 4. Measure, set, then tune the offsets.
+MEMBRANE_Z = 2              # Reference height above zymo_96_spin_plate.json's well bottom. Final tip
+                            # positions were set by eye on the 2026-10-05 dry run via the *_DZ corrections below.
 ELUTION_Z = MEMBRANE_Z + 2  # water lands on the membrane, touches nothing else
 LOAD_Z = MEMBRANE_Z + 5     # above the ~3 mm a 150 uL load would pool to; under vacuum it stays lower
-WASH_Z = MEMBRANE_Z + 10    # above the ~6 mm 300 uL pools to: tip never touches the wash,
-                            # so one tip can do both washes without carrying well contents to the trough
+WASH_Z = MEMBRANE_Z + 12    # 8 mm after ON_COLLAR_DZ: clears the ~6 mm 300 uL pools to. The tip never touches
+                            # the wash, so one tip does both washes without carrying well contents to the trough
 WASH_CLEARANCE = 2          # mm the wash tip must stay above the estimated pooled wash level
+# Deck corrections, set from the dry run (2026-10-05): tips sat too high in the spin plate.
+# Applied on top of the nominal heights above; the wash clearance check includes them.
+ON_COLLAR_DZ = -4           # spin plate on the collar: load + washes
+STACKED_DZ = -2             # spin plate on the elution plate, collar around it: elution
 
 # Gripper (unchanged from v6)
 SPACER_GRIP_RAISE = 5
@@ -106,10 +115,10 @@ def add_parameters(p: protocol_api.ParameterContext):
     p.add_int(
         variable_name="sample_volume",
         display_name="Sample Volume",
-        description="DNA sample already in each PCR plate well.",
+        description="Taken from each sample well with 50 uL tips. Set to the full eluate.",
         default=50,
         minimum=10,
-        maximum=60,
+        maximum=50,
         unit="uL",
     )
     p.add_int(
@@ -120,6 +129,7 @@ def add_parameters(p: protocol_api.ParameterContext):
         choices=[
             {"display_name": "2:1 (genomic / plasmid DNA)", "value": 2},
             {"display_name": "5:1 (PCR product, fragments)", "value": 5},
+            {"display_name": "7:1 (ssDNA, cDNA)", "value": 7},
         ],
     )
     p.add_str(
@@ -159,9 +169,9 @@ def add_parameters(p: protocol_api.ParameterContext):
     p.add_int(
         variable_name="load_pressure",
         display_name="Load Vacuum Pressure",
-        description="Gentle vacuum held while the sample is dispensed. Tune against yield.",
-        default=-125,
-        minimum=-350,
+        description="Vacuum held while the sample is dispensed. Tune against yield.",
+        default=-350,       # matches the validated pull-through; with the vent closed it pulls deeper
+        minimum=-800,
         maximum=-50,
         unit="mbar",
     )
@@ -197,12 +207,7 @@ def run(ctx: protocol_api.ProtocolContext):
 
     sample_vol = p.sample_volume
     binding_vol = max(MIN_BINDING_VOL, p.binding_ratio * sample_vol)
-    load_vol = sample_vol + binding_vol
-    if load_vol > PCR_WELL_MAX:
-        raise ValueError(
-            f"{sample_vol} uL sample + {binding_vol} uL Binding Buffer = {load_vol} uL, "
-            f"over the {PCR_WELL_MAX} uL PCR-well limit. Lower the sample volume."
-        )
+    load_vol = sample_vol + binding_vol     # at most 50 + 350 = 400 uL: fits tip and spin-plate well
     mix_vol = round(0.8 * load_vol)
 
     # ---------------- Deck ----------------
@@ -212,13 +217,15 @@ def run(ctx: protocol_api.ProtocolContext):
     spin_plate = collar.load_labware("zymo_96_spin_plate", "Zymo-Spin I-96 Plate", **CUSTOM)
     spacer = ctx.load_adapter("custom_vacuum_manifold_spacer_tall", "D2", **CUSTOM)
     elution_plate = spacer.load_labware("elution_plate_placeholder", "Elution plate", **CUSTOM)
-    samples = ctx.load_labware(SAMPLE_PLATE, "A2", "DNA samples")["A1"]
+    sample_plate = ctx.load_labware("elution_plate_placeholder", "C2", "Samples (extraction eluate)", **CUSTOM)
+    samples = sample_plate["A1"]
+    mix = ctx.load_labware(MIX_PLATE, "A2", "Mixing plate")["A1"]
 
     bind_rack = ctx.load_adapter("opentrons_flex_96_tiprack_adapter", "A1").load_labware(TIPRACK)
     wash_rack = ctx.load_adapter("opentrons_flex_96_tiprack_adapter", "B1").load_labware(TIPRACK)
-    elution_tips = ctx.load_adapter("opentrons_flex_96_tiprack_adapter", "D1").load_labware(
-        ELUTION_TIPRACK, "50 uL tips for elution"
-    )
+    small_adapter = ctx.load_adapter("opentrons_flex_96_tiprack_adapter", "D1")
+    sample_tips = small_adapter.load_labware(ELUTION_TIPRACK, "50 uL tips for sample transfer")
+    elution_tips = ctx.load_labware(ELUTION_TIPRACK, "C4", "50 uL tips for elution")
     pad = ctx.load_labware("dutton_blot_pad", "B4", "Blot towel", **CUSTOM) if p.blot else None
 
     # Full pickup; every pick_up_tip names its rack, so automatic tip tracking never decides.
@@ -235,7 +242,7 @@ def run(ctx: protocol_api.ProtocolContext):
     wash = trough("B3", "DNA Wash Buffer (ethanol added)", "#FFFB00", 96 * 2 * WASH_VOL)
     water = trough("C3", "Nuclease-free water", "#0048FF", 96 * p.elution_volume)
     dna = ctx.define_liquid("DNA sample", "Operator-loaded", "#B266FF")
-    for well in samples.parent.wells():
+    for well in sample_plate.wells():
         well.load_liquid(dna, sample_vol)
 
     # ---------------- Helpers ----------------
@@ -321,10 +328,11 @@ def run(ctx: protocol_api.ProtocolContext):
     # if the real column tapers, the true level is higher, so keep some clearance.
     well_area = 3.14159 * (spin_plate["A1"].diameter / 2) ** 2
     wash_level = WASH_VOL / well_area
-    if WASH_Z - MEMBRANE_Z < wash_level + WASH_CLEARANCE:
+    wash_above_membrane = WASH_Z + ON_COLLAR_DZ - MEMBRANE_Z
+    if wash_above_membrane < wash_level + WASH_CLEARANCE:
         raise ValueError(
-            f"WASH_Z is {WASH_Z - MEMBRANE_Z} mm above the membrane; 300 uL pools to ~{wash_level:.1f} mm. "
-            f"Raise WASH_Z to at least {wash_level + WASH_CLEARANCE:.1f} mm above the membrane."
+            f"Wash tip is {wash_above_membrane} mm above the membrane; 300 uL pools to ~{wash_level:.1f} mm. "
+            f"Raise WASH_Z so the tip is at least {wash_level + WASH_CLEARANCE:.1f} mm above the membrane."
         )
 
     ctx.comment(
@@ -332,24 +340,41 @@ def run(ctx: protocol_api.ProtocolContext):
         f"elution {p.elution_volume} uL ({p.elution_mode})"
     )
 
+    # ---------------- 0. Samples into the deep-well mixing plate ----------------
+    # Whole eluate: the 50 uL tips draw sample_volume; any shortfall is just air.
+    pip.pick_up_tip(sample_tips["A1"])
+    set_rates("sample")
+    pip.flow_rate.blow_out = ELUTION_BLOWOUT_RATE
+    pip.aspirate(sample_vol, samples.bottom(SAMPLE_ASP_Z))
+    pip.dispense(sample_vol, mix.bottom(SAMPLE_DISP_Z))
+    hold(BLOWOUT_DELAY_S)
+    pip.blow_out(mix.bottom(SAMPLE_DISP_Z))
+    discard_tip()
+
+    # The sample rack is spent: swap the elution rack onto the D1 adapter now, while the deck is idle.
+    # Dry runs returned their tips, so that rack is parked in C1 instead of the chute.
+    if vacuum_elution:
+        ctx.move_labware(sample_tips, "C1" if dry else chute, use_gripper=True)
+        ctx.move_labware(elution_tips, small_adapter, use_gripper=True)
+
     # ---------------- 1. Binding Buffer + mix (kit step 1) ----------------
     pip.pick_up_tip(bind_rack["A1"])
     pip.flow_rate.blow_out = BLOWOUT_RATE   # for the post-mix blow-out; add() sets its own
     set_rates("binding")
-    add(binding_vol, binding.bottom(ASP_Z), samples.top(PCR_TOP_Z), viscous=True)
+    add(binding_vol, binding.bottom(ASP_Z), mix.top(DEEP_TOP_Z), viscous=True)
 
     set_rates("mix")
     for _ in range(MIX_REPS):
-        pip.aspirate(mix_vol, samples.bottom(ASP_Z))
-        pip.dispense(mix_vol, samples.bottom(MIX_DISP_Z))
-    pip.blow_out(samples.top(PCR_TOP_Z))
+        pip.aspirate(mix_vol, mix.bottom(ASP_Z))
+        pip.dispense(mix_vol, mix.bottom(MIX_DISP_Z))
+    pip.blow_out(mix.top(DEEP_TOP_Z))
 
-    # ---------------- 2-3. Load under gentle vacuum, then pull through (kit steps 2-3) ----------------
+    # ---------------- 2-3. Load under vacuum, then pull through (kit steps 2-3) ----------------
     # Vacuum starts before the aspirate so it has ramped by the time the tips reach the plate.
-    # Aspirates the full nominal volume; whatever the PCR well keeps behind is the loss.
+    # Aspirates the full nominal volume; whatever the deep well keeps behind is the loss.
     set_rates("load")
     load_task = vacuum_on(p.load_pressure)
-    add(load_vol, samples.bottom(ASP_Z), spin_plate["A1"].bottom(LOAD_Z), viscous=True)
+    add(load_vol, mix.bottom(LOAD_ASP_Z), spin_plate["A1"].bottom(LOAD_Z + ON_COLLAR_DZ), viscous=True)
     discard_tip()
     vacuum_off(load_task)
     vacuum(p.vac_pressure, p.vac_time)
@@ -359,9 +384,9 @@ def run(ctx: protocol_api.ProtocolContext):
     # Dispensed at WASH_Z, above the pooled level: no tip contact, so one tip serves both washes.
     pip.pick_up_tip(wash_rack["A1"])
     set_rates("wash")
-    add(WASH_VOL, wash.bottom(ASP_Z), spin_plate["A1"].bottom(WASH_Z))
+    add(WASH_VOL, wash.bottom(ASP_Z), spin_plate["A1"].bottom(WASH_Z + ON_COLLAR_DZ))
     vacuum(p.vac_pressure, p.vac_time)
-    add(WASH_VOL, wash.bottom(ASP_Z), spin_plate["A1"].bottom(WASH_Z))
+    add(WASH_VOL, wash.bottom(ASP_Z), spin_plate["A1"].bottom(WASH_Z + ON_COLLAR_DZ))
     discard_tip()
     vacuum(p.vac_pressure, p.vac_time)
     vacuum(p.dry_pressure, p.dry_time)   # stands in for the kit's 15 min second-wash spin
@@ -392,9 +417,9 @@ def run(ctx: protocol_api.ProtocolContext):
     set_rates("water")
     pip.flow_rate.blow_out = ELUTION_BLOWOUT_RATE
     pip.aspirate(p.elution_volume, water.bottom(ELUTION_ASP_Z))
-    pip.dispense(p.elution_volume, spin_plate["A1"].bottom(ELUTION_Z))
+    pip.dispense(p.elution_volume, spin_plate["A1"].bottom(ELUTION_Z + STACKED_DZ))
     hold(BLOWOUT_DELAY_S)
-    pip.blow_out(spin_plate["A1"].bottom(ELUTION_Z))
+    pip.blow_out(spin_plate["A1"].bottom(ELUTION_Z + STACKED_DZ))
     discard_tip()
 
     hold(p.elution_incubation)
