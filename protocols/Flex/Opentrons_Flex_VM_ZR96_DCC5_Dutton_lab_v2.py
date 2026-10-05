@@ -70,14 +70,17 @@ ELUTION_ASP_Z = 0.4         # water draw with the 50 uL tips (0.2 sealed them on
 PCR_TOP_Z = -2              # below PCR well top, Binding Buffer dispense
 MIX_DISP_Z = 4              # above PCR well bottom
 # Spin-plate heights all hang off MEMBRANE_Z, so one measurement sets every dispense.
-MEMBRANE_Z = 2              # UNMEASURED. Membrane surface above zymo_96_spin_plate.json's well bottom
-                            # (the definition puts that at the lowest point of the plate, likely the nozzle
-                            # tip). 2 reproduces v1's ELUTION_Z of 4. Measure, set, then tune the offsets.
+MEMBRANE_Z = 2              # Reference height above zymo_96_spin_plate.json's well bottom. Final tip
+                            # positions were set by eye on the 2026-10-05 dry run via the *_DZ corrections below.
 ELUTION_Z = MEMBRANE_Z + 2  # water lands on the membrane, touches nothing else
 LOAD_Z = MEMBRANE_Z + 5     # above the ~3 mm a 150 uL load would pool to; under vacuum it stays lower
-WASH_Z = MEMBRANE_Z + 10    # above the ~6 mm 300 uL pools to: tip never touches the wash,
-                            # so one tip can do both washes without carrying well contents to the trough
+WASH_Z = MEMBRANE_Z + 12    # 8 mm after ON_COLLAR_DZ: clears the ~6 mm 300 uL pools to. The tip never touches
+                            # the wash, so one tip does both washes without carrying well contents to the trough
 WASH_CLEARANCE = 2          # mm the wash tip must stay above the estimated pooled wash level
+# Deck corrections, set from the dry run (2026-10-05): tips sat too high in the spin plate.
+# Applied on top of the nominal heights above; the wash clearance check includes them.
+ON_COLLAR_DZ = -4           # spin plate on the collar: load + washes
+STACKED_DZ = -2             # spin plate on the elution plate, collar around it: elution
 
 # Gripper (unchanged from v6)
 SPACER_GRIP_RAISE = 5
@@ -321,10 +324,11 @@ def run(ctx: protocol_api.ProtocolContext):
     # if the real column tapers, the true level is higher, so keep some clearance.
     well_area = 3.14159 * (spin_plate["A1"].diameter / 2) ** 2
     wash_level = WASH_VOL / well_area
-    if WASH_Z - MEMBRANE_Z < wash_level + WASH_CLEARANCE:
+    wash_above_membrane = WASH_Z + ON_COLLAR_DZ - MEMBRANE_Z
+    if wash_above_membrane < wash_level + WASH_CLEARANCE:
         raise ValueError(
-            f"WASH_Z is {WASH_Z - MEMBRANE_Z} mm above the membrane; 300 uL pools to ~{wash_level:.1f} mm. "
-            f"Raise WASH_Z to at least {wash_level + WASH_CLEARANCE:.1f} mm above the membrane."
+            f"Wash tip is {wash_above_membrane} mm above the membrane; 300 uL pools to ~{wash_level:.1f} mm. "
+            f"Raise WASH_Z so the tip is at least {wash_level + WASH_CLEARANCE:.1f} mm above the membrane."
         )
 
     ctx.comment(
@@ -349,7 +353,7 @@ def run(ctx: protocol_api.ProtocolContext):
     # Aspirates the full nominal volume; whatever the PCR well keeps behind is the loss.
     set_rates("load")
     load_task = vacuum_on(p.load_pressure)
-    add(load_vol, samples.bottom(ASP_Z), spin_plate["A1"].bottom(LOAD_Z), viscous=True)
+    add(load_vol, samples.bottom(ASP_Z), spin_plate["A1"].bottom(LOAD_Z + ON_COLLAR_DZ), viscous=True)
     discard_tip()
     vacuum_off(load_task)
     vacuum(p.vac_pressure, p.vac_time)
@@ -359,9 +363,9 @@ def run(ctx: protocol_api.ProtocolContext):
     # Dispensed at WASH_Z, above the pooled level: no tip contact, so one tip serves both washes.
     pip.pick_up_tip(wash_rack["A1"])
     set_rates("wash")
-    add(WASH_VOL, wash.bottom(ASP_Z), spin_plate["A1"].bottom(WASH_Z))
+    add(WASH_VOL, wash.bottom(ASP_Z), spin_plate["A1"].bottom(WASH_Z + ON_COLLAR_DZ))
     vacuum(p.vac_pressure, p.vac_time)
-    add(WASH_VOL, wash.bottom(ASP_Z), spin_plate["A1"].bottom(WASH_Z))
+    add(WASH_VOL, wash.bottom(ASP_Z), spin_plate["A1"].bottom(WASH_Z + ON_COLLAR_DZ))
     discard_tip()
     vacuum(p.vac_pressure, p.vac_time)
     vacuum(p.dry_pressure, p.dry_time)   # stands in for the kit's 15 min second-wash spin
@@ -392,9 +396,9 @@ def run(ctx: protocol_api.ProtocolContext):
     set_rates("water")
     pip.flow_rate.blow_out = ELUTION_BLOWOUT_RATE
     pip.aspirate(p.elution_volume, water.bottom(ELUTION_ASP_Z))
-    pip.dispense(p.elution_volume, spin_plate["A1"].bottom(ELUTION_Z))
+    pip.dispense(p.elution_volume, spin_plate["A1"].bottom(ELUTION_Z + STACKED_DZ))
     hold(BLOWOUT_DELAY_S)
-    pip.blow_out(spin_plate["A1"].bottom(ELUTION_Z))
+    pip.blow_out(spin_plate["A1"].bottom(ELUTION_Z + STACKED_DZ))
     discard_tip()
 
     hold(p.elution_incubation)
