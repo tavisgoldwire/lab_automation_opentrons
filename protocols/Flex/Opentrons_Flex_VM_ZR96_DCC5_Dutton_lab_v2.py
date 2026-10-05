@@ -10,14 +10,15 @@ Deck
   C2        samples, in the elution plate from the extraction protocol
   A2        empty 2 mL deep-well plate (mixing)   B4  paper towel (blot, optional)
   B2 B3 C3  Binding Buffer, Wash Buffer, water    D3  waste chute
-  (A1, B1, D1 racks sit on 96-tip adapters; C1 empty)
+  C1        temperature module: on the deck, not used and not loaded here. Nothing may go to C1
+  (A1, B1, D1 racks sit on 96-tip adapters)
 
 Kit steps -> protocol
-  0  Samples: elution plate -> deep-well plate (50 uL tips), rack swap by gripper
+  0  Samples: elution plate -> deep-well plate (50 uL tips)
   1  Binding Buffer onto the samples, mix               (kit: vortex)
   2-3 Load spin plate under vacuum, then pull           (kit: 5 min spin)
   4  300 uL wash, vacuum, 300 uL wash, vacuum, dry      (kit: 5 min + 15 min spins)
-  5  Blot, stack on elution plate, water, vacuum elute  (kit: 3 min spin)
+  5  Blot, stack on elution plate, gripper swaps the 50 uL racks, water, vacuum elute (kit: 3 min spin)
 
 Wall contact (v2)
   Binding Buffer leaves salt wherever it touches, so it goes in low and slowly with the vacuum
@@ -351,12 +352,6 @@ def run(ctx: protocol_api.ProtocolContext):
     pip.blow_out(mix.bottom(SAMPLE_DISP_Z))
     discard_tip()
 
-    # The sample rack is spent: swap the elution rack onto the D1 adapter now, while the deck is idle.
-    # Dry runs returned their tips, so that rack is parked in C1 instead of the chute.
-    if vacuum_elution:
-        ctx.move_labware(sample_tips, "C1" if dry else chute, use_gripper=True)
-        ctx.move_labware(elution_tips, small_adapter, use_gripper=True)
-
     # ---------------- 1. Binding Buffer + mix (kit step 1) ----------------
     pip.pick_up_tip(bind_rack["A1"])
     pip.flow_rate.blow_out = BLOWOUT_RATE   # for the post-mix blow-out; add() sets its own
@@ -412,6 +407,11 @@ def run(ctx: protocol_api.ProtocolContext):
         drop_offset={"x": MODULE_DROP_X, "y": 0, "z": 0},
     )
     ctx.move_labware(collar, vm, use_gripper=True)
+
+    # Spent sample rack off the D1 adapter, elution rack from C4 onto it (same swap as v6).
+    # Dry runs returned their tips, so that rack is parked in D2, empty now the spacer has moved.
+    ctx.move_labware(sample_tips, "D2" if dry else chute, use_gripper=True)
+    ctx.move_labware(elution_tips, small_adapter, use_gripper=True)
 
     pip.pick_up_tip(elution_tips["A1"])
     set_rates("water")
