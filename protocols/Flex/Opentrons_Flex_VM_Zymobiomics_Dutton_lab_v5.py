@@ -33,7 +33,7 @@ requirements = {"robotType": "Flex", "apiLevel": "2.30"}
 
 # Labware
 CUSTOM = {"namespace": "custom_beta", "version": 3}
-RESERVOIR = "nest_12_reservoir_15ml"   # change if your 12-well trough is a different model
+RESERVOIR = "nest_12_reservoir_22ml"   
 RESERVOIR_MAX = 15_000      # uL per reservoir well
 WELL_MARGIN = 1_500         # uL left in each reservoir well after its last draw. Estimate, NOT validated:
                             # the well's V-bottom holds ~0.7 mL below 2 mm
@@ -64,7 +64,7 @@ BLOWOUT_DELAY_S = 5         # after dispensing into the spin plate, before blowi
 
 # Heights, mm
 ASP_Z = 0.75                 # above well bottom, every 1000 uL tip aspiration
-ELUTION_ASP_Z = 0.4         # water draw with the 50 uL tips (0.2 sealed them on the 1-well trough floor).
+ELUTION_ASP_Z = 0.75         # water draw with the 50 uL tips (0.2 sealed them on the 1-well trough floor).
                             # NOT dry-run tested in the 12-well reservoir
 MIX_DISP_Z = 12             # above well bottom
 TOP_Z = -5                  # below well top, non-contact dispense and every blow-out
