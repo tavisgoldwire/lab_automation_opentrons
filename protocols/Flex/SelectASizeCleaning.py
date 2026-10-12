@@ -71,8 +71,8 @@ def run(protocol: protocol_api.ProtocolContext):
     elution_tips_50 = protocol.load_labware('opentrons_flex_96_tiprack_50ul', 'B2')
     sample_plate = temp_adapter.load_labware('opentrons_96_wellplate_200ul_pcr_full_skirt')
     final_elution_plate = protocol.load_labware('opentrons_96_wellplate_200ul_pcr_full_skirt', 'B3')
-    reagent_reservoir = protocol.load_labware('nest_12_reservoir_15ml', 'D2')
-    waste_reservoir = protocol.load_labware('nest_12_reservoir_15ml', 'C3')
+    reagent_reservoir = protocol.load_labware('nest_12_reservoir_22ml', 'D2')
+    waste_reservoir = protocol.load_labware('nest_1_reservoir_195ml', 'C3')
 
     # LIQUIDS
     dnase_free_water = reagent_reservoir.wells()[0]
