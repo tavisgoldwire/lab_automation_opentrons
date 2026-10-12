@@ -203,8 +203,8 @@ def run(protocol: protocol_api.ProtocolContext):
 
     for col_idx in range(12):
             current_column = sample_columns[col_idx]
-            pip96.aspirate(20, dnase_free_water.bottom(0.3), rate=0.5)  # elution aspiration
-            pip96.dispense(20, current_column[0].top()) #dispense in samples without touching samples
+            pip96.aspirate(20, dnase_free_water.bottom(0.2), rate=0.25)  # elution aspiration
+            pip96.dispense(20, current_column[0].top(), rate = 0.5) #dispense in samples without touching samples
             pip96.blow_out(current_column[0].top()) #blow out residue
     
             if col_idx == 5: #midpoint mix
