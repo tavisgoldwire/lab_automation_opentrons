@@ -77,7 +77,7 @@ def run(protocol: protocol_api.ProtocolContext):
 
     sample_plate = temp_adapter.load_labware('opentrons_96_wellplate_200ul_pcr_full_skirt')
     final_elution_plate = protocol.load_labware('opentrons_96_wellplate_200ul_pcr_full_skirt', 'D1')
-    reagent_reservoir = protocol.load_labware('nest_12_reservoir_15ml', 'C2')
+    reagent_reservoir = protocol.load_labware('nest_12_reservoir_22ml', 'C2')
     waste_reservoir = protocol.load_labware('nest_1_reservoir_195ml', 'B2')
 
 # LIQUIDS
