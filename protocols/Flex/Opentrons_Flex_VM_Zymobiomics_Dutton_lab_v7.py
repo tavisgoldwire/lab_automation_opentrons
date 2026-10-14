@@ -3,11 +3,21 @@ ZymoBIOMICS 96 DNA Kit on the Opentrons Flex + Vacuum Module (Dutton lab V7).
 
 Deck
   A1 B1 D1  1000 uL tip racks on 96 adapters     C4  50 uL tip rack (elution)
-  A2        sample plate, 400 uL lysate/well     B4  paper towel (blot, optional)
+  A2        sample plate, Lysate Volume/well     B4  paper towel (blot, optional)
   B2 B3     Binding Buffer, Wash Buffer 1        A3  vacuum module + tall collar + spin plate
-  C2 C3     Wash Buffer 2, water                 D2  tall spacer + elution plate
-  D3        waste chute
+  C2        Wash Buffer 2                        D2  tall spacer + elution plate
+  C1        temperature module + universal flat adapter + water reservoir
+  D3        waste chute                          C3  empty
   Reagents are in 12-well reservoirs: tip column k always lands in reservoir well k.
+
+Heated elution water: the C1 module starts heating at Wash 2 (about 30 min before elution) and
+switches off once the water is drawn. Zymo's low-yield FAQ for this kit: "Apply heated elution
+buffer (60-70 C) and allow elution buffer to incubate on the column for several minutes."
+Before elution the protocol waits for the module to reach its setpoint. The water in the plastic
+reservoir will lag below that: measure it once on a full dry run.
+The universal flat adapter is defined by Opentrons for the Heater-Shaker. The API accepts it on
+the temperature module but doesn't check the physical fit: run Labware Position Check on the
+water reservoir, and watch the 50 uL tips at the water draw (0.75 mm off the floor) on a dry run.
 
 Partial plates (Sample Columns < 12)
   Full 96-tip pickup throughout, but every tip rack holds tips only in columns 1-N. The empty
@@ -15,16 +25,16 @@ Partial plates (Sample Columns < 12)
   Samples go in plate columns 1-N. Seal spin-plate columns N+1 to 12 so the vacuum doesn't
   pull air through their dry membranes.
 
-Vacuum-on loading (from ZR-96 v2): lysate goes in low and slowly with the vacuum already
-running, so it drains as it arrives and the binding-buffer salt line stays near the membrane.
-
-Pump power (new in v7, Pump Power > 0): observed on the robot, pressure control stops the pump once
-it reaches the setpoint and only restarts it if the pressure rises past it, so liquid trickles
-through with the vent closed. Power mode runs the pump at a fixed duty cycle with no setpoint, so it never idles.
-  Lysate load + pull-through: power mode the whole time (the load/pull-through pressures don't apply).
-  Washes and dry: pressure control for the first half, power mode for the second half.
-  Elution: unchanged, pressure control only.
-Pump Power = 0 runs the v6 vacuum behaviour.
+Vacuum: every pull except elution runs the pump at a fixed power (Pump Power), with no pressure
+setpoint. Observed on the robot: under pressure control the pump stops once it reaches the
+setpoint, so liquid only trickles through. Full power drained the plate much better (2026-10-13).
+  Lysate: lysate + 1200 uL binding buffer, in 4 equal loads (400 uL each at the kit's 400 uL of
+  supernatant, 350 uL at 200 uL). The pump starts before each aspirate, the lysate goes in low and
+  slowly (vacuum-on loading, from ZR-96 v2), the tips park above the sample plate, then the pump
+  runs for Load Pull Time (Final Load Pull Time after the 4th load). At 400 uL a load can't pool
+  above the Wash 1 (400 uL) line, so every wash reaches the top of the binding-buffer line.
+  Elution: power in three equal steps over Elution Vacuum Time: Elution Start Power, halfway to
+  100%, then 100%. Most of the eluate drips through at low power; full power only at the end.
 
 Ends at elution. HRC inhibitor removal (kit step 14) is done off-deck.
 """
@@ -50,11 +60,11 @@ ELUTION_TIPRACK = "opentrons_flex_96_tiprack_50ul"
 
 # Volumes, uL per well
 BINDING_VOL = 600           # added twice
-LOAD_VOL = 800              # 400 lysate + 1200 binding, moved twice
+LOADS = 4                   # lysate + binding buffer is loaded in this many equal parts
 WASH1_VOL = 400
 WASH2_VOLS = (700, 200)
 MIX_VOL = 900
-MIX_REPS = 6
+MIX_REPS = 10               # about 2 min, in place of the kit's 2 min vortex (was 6)
 AIR_GAP = 20                # not used at elution: 50 uL tips have no room for one
 
 # Flow rates, uL/s per channel: (aspirate, dispense)
@@ -74,8 +84,13 @@ BLOWOUT_DELAY_S = 5         # after dispensing into the spin plate, before blowi
 ASP_Z = 0.75                 # above well bottom, every 1000 uL tip aspiration
 ELUTION_ASP_Z = 0.75         # water draw with the 50 uL tips (0.2 sealed them on the 1-well trough floor).
                             # NOT dry-run tested in the 12-well reservoir
-MIX_DISP_Z = 12             # above well bottom
+MIX_DISP_Z = 5              # above well bottom. Was 12: after each 900 uL mix draw the rest sits at
+                            # ~10 mm (200 uL lysate) to ~13 mm (400 uL), so 12 mm sprayed into the surface
+EXIT_SPEED = 5              # mm/s, pulling the tips out of the sample well after each load draw so less
+                            # lysate clings to the outside of the tips and drips as they cross the spin plate
 TOP_Z = -5                  # below well top, non-contact dispense and every blow-out
+PARK_Z = 5                  # above the sample plate top: where the tips wait out each pull, so they
+                            # aren't sitting in the spin plate and any drip lands in their own well
 LOAD_Z = 3                  # above the spin plate definition's well bottom, lysate dispense under vacuum.
                             # ZR-96 v2's load height on the same plate and collar (MEMBRANE_Z + 5 + ON_COLLAR_DZ)
 ELUTION_Z = 4               # above the definition's well bottom. zymo_96_spin_plate.json puts that
@@ -119,7 +134,16 @@ def add_parameters(p: protocol_api.ParameterContext):
         variable_name="blot",
         display_name="Blot Spin Plate",
         description="Touch the plate underside to the B4 towel before elution.",
-        default=True,
+        default=False,
+    )
+    p.add_int(
+        variable_name="lysate_volume",
+        display_name="Lysate Volume",
+        description="Supernatant per sample well. Kit: up to 400 uL. Sets the 4 load volumes.",
+        default=400,
+        minimum=100,
+        maximum=400,
+        unit="uL",
     )
     p.add_float(
         variable_name="elution_volume",
@@ -134,7 +158,7 @@ def add_parameters(p: protocol_api.ParameterContext):
         variable_name="elution_incubation",
         display_name="Elution Incubation",
         description="Soak on the membrane before the elution vacuum.",
-        default=60,
+        default=300,
         minimum=0,
         maximum=600,
         unit="s",
@@ -142,44 +166,55 @@ def add_parameters(p: protocol_api.ParameterContext):
     p.add_int(
         variable_name="pump_power",
         display_name="Pump Power",
-        description="0 = v6 pressure control. Above 0: lysate steps at this power, washes/dry halfway.",
+        description="Pump duty cycle for every pull except elution. No pressure setpoint.",
         default=100,
+        minimum=1,
+        maximum=100,
+        unit="%",
+    )
+    # Pull times at Pump Power, each followed by a vent.
+    for key, name, description, default in (
+        ("load_time", "Load Pull Time", "Pull after each of lysate loads 1-3.", 300),
+        ("final_load_time", "Final Load Pull Time", "Pull after the last lysate load.", 600),
+        ("wash_time", "Wash Pull Time", "Pull after each of the three washes.", 540),
+        ("dry_time", "Membrane Dry Time", "Extra pull after the last wash, to dry the membrane.", 600),
+    ):
+        p.add_int(
+            variable_name=key,
+            display_name=name,
+            description=description,
+            default=default,
+            minimum=60,
+            maximum=900,
+            unit="s",
+        )
+    p.add_int(
+        variable_name="elution_temp",
+        display_name="Elution Water Temp",
+        description="C1 module heats the water from the start of Wash 2. 0 = no heating.",
+        default=65,
         minimum=0,
+        maximum=70,
+        unit="C",
+    )
+    p.add_int(
+        variable_name="elution_start_power",
+        display_name="Elution Start Power",
+        description="Elution steps up from this power to 100% in three equal steps.",
+        default=50,
+        minimum=1,
         maximum=100,
         unit="%",
     )
     p.add_int(
-        variable_name="load_pressure",
-        display_name="Load Vacuum Pressure",
-        description="Vacuum held while lysate is dispensed. Only used when Pump Power is 0.",
-        default=-600,
-        minimum=-800,
-        maximum=-50,
-        unit="mbar",
+        variable_name="elution_time",
+        display_name="Elution Vacuum Time",
+        description="Total elution pull, split evenly across the three power steps.",
+        default=240,
+        minimum=60,
+        maximum=900,
+        unit="s",
     )
-    # -350 mbar / 210 s drained the plate on 2026-09-23 but left 5 wells clogged on the next run.
-    # -600 mbar / 600 s cleared them, so pull-through and dry default to that now.
-    for key, name, default_pressure, default_time in (
-        ("vac", "Pull-through", -600, 600),
-        ("dry", "Membrane Dry", -600, 600),
-        ("elution", "Elution Vacuum", -350, 240),
-    ):
-        p.add_int(
-            variable_name=f"{key}_pressure",
-            display_name=f"{name} Pressure",
-            default=default_pressure,
-            minimum=-800,
-            maximum=-350,
-            unit="mbar",
-        )
-        p.add_int(
-            variable_name=f"{key}_time",
-            display_name=f"{name} Time",
-            default=default_time,
-            minimum=210,
-            maximum=900,
-            unit="s",
-        )
 
 
 def run(ctx: protocol_api.ProtocolContext):
@@ -194,6 +229,8 @@ def run(ctx: protocol_api.ProtocolContext):
     spacer = ctx.load_adapter("custom_vacuum_manifold_spacer_tall", "D2", **CUSTOM)
     elution_plate = spacer.load_labware("elution_plate_placeholder", "Elution plate", **CUSTOM)
     samples = ctx.load_labware("nest_96_wellplate_2ml_deep", "A2", "Samples")["A1"]
+    temp_mod = ctx.load_module("temperatureModuleV2", "C1")
+    water_adapter = temp_mod.load_adapter("opentrons_universal_flat_adapter")
 
     tip_adapters = {s: ctx.load_adapter("opentrons_flex_96_tiprack_adapter", s) for s in ("A1", "B1", "D1")}
     racks = [adapter.load_labware(TIPRACK) for adapter in tip_adapters.values()]
@@ -204,10 +241,11 @@ def run(ctx: protocol_api.ProtocolContext):
 
     n = p.sample_columns
 
-    def trough(slot, name, color, per_tip_ul):
+    def trough(slot, name, color, per_tip_ul, on=None):
         """12-well reservoir. Each tip column draws from its own well, 8 tips at a time, so
-        wells 1-n get everything that column's tips take over the run, plus WELL_MARGIN."""
-        reservoir = ctx.load_labware(RESERVOIR, slot, name)
+        wells 1-n get everything that column's tips take over the run, plus WELL_MARGIN.
+        on: an adapter to load the reservoir onto instead of the bare slot."""
+        reservoir = on.load_labware(RESERVOIR, name) if on else ctx.load_labware(RESERVOIR, slot, name)
         fill = 8 * per_tip_ul + WELL_MARGIN
         if fill > RESERVOIR_MAX:
             raise ValueError(f"{name} needs {fill} uL per well; the reservoir holds {RESERVOIR_MAX}.")
@@ -220,11 +258,13 @@ def run(ctx: protocol_api.ProtocolContext):
     binding = trough("B2", "DNA Binding Buffer", "#FF0000", 2 * BINDING_VOL)
     wash1 = trough("B3", "DNA Wash Buffer 1", "#FFFB00", WASH1_VOL)
     wash2 = trough("C2", "DNA Wash Buffer 2", "#00FF6E", sum(WASH2_VOLS))
-    water = trough("C3", "Nuclease-free water", "#0048FF", p.elution_volume)
+    water = trough("C1", "Nuclease-free water", "#0048FF", p.elution_volume, on=water_adapter)
     lysate = ctx.define_liquid("Clarified lysate", "Operator-loaded", "#B266FF")
     for column in samples.parent.columns()[:n]:
         for well in column:
-            well.load_liquid(lysate, 400)
+            well.load_liquid(lysate, p.lysate_volume)
+    load_vol = (p.lysate_volume + 2 * BINDING_VOL) / LOADS  # every load takes the same share
+    ctx.comment(f"Setup: A2 Samples: {p.lysate_volume} uL clarified lysate per well")
     ctx.comment(
         f"{n} sample columns ({8 * n} samples): every tip rack holds tips in columns 1-{n} only. "
         f"Seal spin-plate columns {n + 1}-12." if n < 12 else "Full plate: 96 samples, full tip racks."
@@ -235,42 +275,42 @@ def run(ctx: protocol_api.ProtocolContext):
         if not dry and seconds > 0:
             ctx.delay(seconds=seconds)
 
-    power = p.pump_power  # 0 = v6 pressure control throughout
-
-    def vacuum(pressure, seconds, power_finish=False):
-        """Pressure control at `pressure`, then vent. power_finish: the second half runs the pump
-        at `power` instead, so it keeps pulling rather than idling at the setpoint."""
+    def pull(seconds):
+        """Pump at Pump Power for `seconds` (no pressure setpoint), then vent."""
         if p.run_mode == "dry_short":
             seconds = DRY_SHORT_VAC_S
         vm.close_vent()
-        if power_finish and power:
-            half = seconds // 2
-            ctx.wait_for_tasks([vm.start_set_vacuum_pressure(pressure, half)])  # no vent between halves
-            task = vm.start_set_vacuum_power(power, seconds - half, vent_after=True, equalize_timeout_s=20)
-        else:
-            task = vm.start_set_vacuum_pressure(pressure, seconds, vent_after=True, equalize_timeout_s=20)
+        task = vm.start_set_vacuum_power(p.pump_power, seconds, vent_after=True, equalize_timeout_s=20)
         ctx.wait_for_tasks([task])
 
-    def power_pull(seconds):
-        """Pump at `power` for the whole time (no pressure setpoint), then vent."""
-        if p.run_mode == "dry_short":
-            seconds = DRY_SHORT_VAC_S
+    def pump_on():
+        """Pump at Pump Power with no end time; the protocol keeps running. End with pump_off()."""
         vm.close_vent()
-        task = vm.start_set_vacuum_power(power, seconds, vent_after=True, equalize_timeout_s=20)
-        ctx.wait_for_tasks([task])
+        return vm.start_set_vacuum_power(p.pump_power)
 
-    def vacuum_on(pressure):
-        """Pump on with no end time; the protocol keeps running. End with vacuum_off().
-        Power mode when `power` > 0, otherwise pressure control at `pressure`."""
-        vm.close_vent()
-        if power:
-            return vm.start_set_vacuum_power(power)
-        return vm.start_set_vacuum_pressure(pressure)
-
-    def vacuum_off(task):
+    def pump_off(task):
         # Stops the pump without venting, as in ZR-96 v2 (worked on the ZR-96 cleanup run).
         vm.stop_vacuum_pump()
         ctx.wait_for_tasks([task])
+
+    def elution_vacuum(seconds):
+        """Step the pump from Elution Start Power to 100% in three equal steps, then vent.
+        No vent between steps, the same back-to-back pattern as v7's first run."""
+        if p.run_mode == "dry_short":
+            seconds = 3 * DRY_SHORT_VAC_S
+        start = p.elution_start_power
+        powers = (start, (start + 100) // 2, 100)
+        step = seconds // 3
+        vm.close_vent()
+        for power in powers[:-1]:
+            ctx.wait_for_tasks([vm.start_set_vacuum_power(power, step)])
+        task = vm.start_set_vacuum_power(
+            powers[-1], seconds - 2 * step, vent_after=True, equalize_timeout_s=20
+        )
+        ctx.wait_for_tasks([task])
+
+    def park():
+        pip.move_to(samples.top(PARK_Z))
 
     def set_rates(name):
         pip.flow_rate.aspirate, pip.flow_rate.dispense = RATES[name]
@@ -281,15 +321,23 @@ def run(ctx: protocol_api.ProtocolContext):
         else:
             pip.drop_tip(chute)
 
-    def add(volume, source, dest, viscous=False, dest_z=None):
+    def add(volume, source, dest, viscous=False, dest_z=None, blow_out=True, slow_exit=False):
         # The air gap is in the tip too, so it is dispensed back out with the liquid.
         # dest_z: dispense that far above dest's bottom instead of from the top. The blow-out
         # stays at the top either way, above anything still pooled.
+        # blow_out=False: no blow-out and no push-out, for liquid that is mixed afterwards.
+        # slow_exit: leave the source well at EXIT_SPEED before the air gap.
         pip.aspirate(volume, source.bottom(ASP_Z))
         if viscous:
             hold(VISCOUS_DELAY_S)
+        if slow_exit:
+            pip.move_to(source.top(), speed=EXIT_SPEED)
         pip.air_gap(AIR_GAP)
-        pip.dispense(volume + AIR_GAP, dest.top(TOP_Z) if dest_z is None else dest.bottom(dest_z))
+        target = dest.top(TOP_Z) if dest_z is None else dest.bottom(dest_z)
+        if not blow_out:
+            pip.dispense(volume + AIR_GAP, target, push_out=0)
+            return
+        pip.dispense(volume + AIR_GAP, target)
         if dest.parent is spin_plate:
             hold(BLOWOUT_DELAY_S)
         pip.blow_out(dest.top(TOP_Z))
@@ -327,29 +375,30 @@ def run(ctx: protocol_api.ProtocolContext):
         go(above_grip)
 
     # ---------------- 1. Binding buffer + mix ----------------
+    # One blow-out, at the end. Every dispense before it uses push_out=0: a push-out leaves the
+    # plunger past its bottom, and the next aspirate then lifts the tips out of the well to reset
+    # it (the "mix, blow out, mix" seen on the robot). Opentrons' own mix() does the same.
     pip.pick_up_tip()
     pip.flow_rate.blow_out = BLOWOUT_RATE
     set_rates("binding")
     for _ in range(2):
-        add(BINDING_VOL, binding, samples, viscous=True)
+        add(BINDING_VOL, binding, samples, viscous=True, blow_out=False)
 
     set_rates("mix")
     for _ in range(MIX_REPS):
         pip.aspirate(MIX_VOL, samples.bottom(ASP_Z))
-        pip.dispense(MIX_VOL, samples.bottom(MIX_DISP_Z))
+        pip.dispense(MIX_VOL, samples.bottom(MIX_DISP_Z), push_out=0)
     pip.blow_out(samples.top(TOP_Z))
 
-    # ---------------- 2. Load spin plate, vacuum on while dispensing ----------------
-    # Vacuum starts before the aspirate so it has ramped by the time the tips reach the plate.
+    # ---------------- 2. Load spin plate in 4 parts, pump on while dispensing ----------------
+    # The pump starts before the aspirate so it is pulling by the time the tips reach the plate.
     set_rates("lysate")
-    for _ in range(2):
-        load_task = vacuum_on(p.load_pressure)
-        add(LOAD_VOL, samples, spin_plate["A1"], viscous=True, dest_z=LOAD_Z)
-        vacuum_off(load_task)
-        if power:
-            power_pull(p.vac_time)
-        else:
-            vacuum(p.vac_pressure, p.vac_time)
+    for i in range(LOADS):
+        load_task = pump_on()
+        add(load_vol, samples, spin_plate["A1"], viscous=True, dest_z=LOAD_Z, slow_exit=True)
+        park()
+        pump_off(load_task)
+        pull(p.final_load_time if i == LOADS - 1 else p.load_time)
     discard_tip()
 
     # ---------------- 3. Wash 1 ----------------
@@ -357,17 +406,23 @@ def run(ctx: protocol_api.ProtocolContext):
     set_rates("wash")
     add(WASH1_VOL, wash1, spin_plate["A1"])
     discard_tip()
-    vacuum(p.vac_pressure, p.vac_time, power_finish=True)
+    pull(p.wash_time)
 
     # ---------------- 4. Wash 2 (x2) + dry ----------------
+    # Heat the elution water from here: about 30 min before it's used, so it warms through the
+    # plastic without evaporating for the whole run. Skipped in 5 s dry runs (they'd wait on it).
+    heat = p.elution_temp > 0 and p.run_mode != "dry_short"
+    if heat:
+        temp_mod.start_set_temperature(p.elution_temp)
     pip.pick_up_tip()
     set_rates("wash")
     add(WASH2_VOLS[0], wash2, spin_plate["A1"])
-    vacuum(p.vac_pressure, p.vac_time, power_finish=True)
+    park()  # over the now-empty sample plate, not the shared Wash 2 trough
+    pull(p.wash_time)
     add(WASH2_VOLS[1], wash2, spin_plate["A1"])
     discard_tip()
-    vacuum(p.vac_pressure, p.vac_time, power_finish=True)
-    vacuum(p.dry_pressure, p.dry_time, power_finish=True)
+    pull(p.wash_time)
+    pull(p.dry_time)
 
     # ---------------- 5. Blot, stack for elution, swap tips ----------------
     ctx.move_labware(collar, vm.manifold_dock, use_gripper=True)
@@ -392,12 +447,16 @@ def run(ctx: protocol_api.ProtocolContext):
     pip.pick_up_tip(elution_tips["A1"])
     set_rates("water")
     pip.flow_rate.blow_out = ELUTION_BLOWOUT_RATE
+    if heat:
+        temp_mod.await_temperature(p.elution_temp)  # the module, not the water: see the docstring
     pip.aspirate(p.elution_volume, water.bottom(ELUTION_ASP_Z))
     pip.dispense(p.elution_volume, spin_plate["A1"].bottom(ELUTION_Z))
     hold(BLOWOUT_DELAY_S)
     pip.blow_out(spin_plate["A1"].bottom(ELUTION_Z))
     discard_tip()
+    if heat:
+        temp_mod.deactivate()
 
     hold(p.elution_incubation)
-    vacuum(p.elution_pressure, p.elution_time)
+    elution_vacuum(p.elution_time)
     ctx.comment("Done. Next, off-deck: HRC plate, 3,500 x g for 3 min (kit step 14).")
