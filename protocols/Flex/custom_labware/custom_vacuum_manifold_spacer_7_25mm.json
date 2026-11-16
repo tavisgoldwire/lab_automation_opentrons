@@ -1,0 +1,67 @@
+{
+  "ordering": [],
+  "brand": {
+    "brand": "Opentrons (custom, 3D-printed)",
+    "brandId": []
+  },
+  "metadata": {
+    "displayName": "Vacuum Manifold Spacer, 7.25 mm (custom)",
+    "displayCategory": "adapter",
+    "displayVolumeUnits": "µL",
+    "tags": []
+  },
+  "dimensions": {
+    "xDimension": 127.0,
+    "yDimension": 85.0,
+    "zDimension": 7.25
+  },
+  "wells": {},
+  "groups": [
+    {
+      "metadata": {},
+      "wells": []
+    }
+  ],
+  "parameters": {
+    "format": "96Standard",
+    "quirks": [
+      "providesStackingDefault"
+    ],
+    "isTiprack": false,
+    "isMagneticModuleCompatible": false,
+    "loadName": "custom_vacuum_manifold_spacer_7_25mm",
+    "isMovableAdapter": true
+  },
+  "namespace": "custom_beta",
+  "version": 1,
+  "schemaVersion": 2,
+  "allowedRoles": [
+    "adapter"
+  ],
+  "cornerOffsetFromSlot": {
+    "x": 0.38,
+    "y": 0.24,
+    "z": 0
+  },
+  "gripperOffsets": {
+    "default": {
+      "pickUpOffset": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "dropOffset": {
+        "x": 0,
+        "y": 0,
+        "z": 1.0
+      }
+    }
+  },
+  "stackingOffsetWithLabware": {
+    "default": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    }
+  }
+}
