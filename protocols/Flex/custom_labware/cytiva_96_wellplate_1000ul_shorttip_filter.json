@@ -1117,7 +1117,8 @@
   "parameters": {
     "format": "96Standard",
     "quirks": [
-      "filterPlate"
+      "filterPlate",
+      "noLabwarePositionCheck"
     ],
     "isTiprack": false,
     "isDeckSlotCompatible": false,
