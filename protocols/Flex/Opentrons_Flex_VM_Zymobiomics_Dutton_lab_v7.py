@@ -61,8 +61,8 @@ MIX_DISP_Z = 5              # above the sample well bottom
 TOP_Z = -5                  # below well top: washes and blow-outs
 PARK_Z = 5                  # above the sample plate, where tips wait during a pull
 EXIT_SPEED = 5              # mm/s, leaving the sample well after each load draw
-LOAD_Z = 3                  # above the membrane, lysate dispense. NOT tested on this plate
-ELUTION_Z = 2               # above the membrane, water dispense. NOT tested on this plate
+LOAD_Z = 5                  # above the membrane, lysate dispense. NOT tested on this plate
+ELUTION_Z = 4               # above the membrane, water dispense. NOT tested on this plate
 
 # Vacuum (pump power, no pressure setpoint)
 PUMP_POWER = 100            # %
@@ -77,7 +77,8 @@ DRY_RUN_PULL = 5            # s, every pull in a dry run
 
 # Gripper
 SPACER_GRIP_RAISE = 5       # mm above default grip, clears the manifold rim
-MODULE_DROP_X = -1.0        # drops on the vacuum module land ~1 mm right
+MODULE_DROP_X = 0.0        # drops on the vacuum module land ~1 mm right 
+# keeps clipping left side. 
 
 
 def add_parameters(p: protocol_api.ParameterContext):
