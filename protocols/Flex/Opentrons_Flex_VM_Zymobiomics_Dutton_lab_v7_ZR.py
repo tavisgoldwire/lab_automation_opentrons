@@ -47,7 +47,7 @@ metadata = {
     "description": "Spin-plate DNA extraction on the vacuum manifold, 8-96 samples, through elution.",
 }
 
-requirements = {"robotType": "Flex", "apiLevel": "2.30"}
+requirements = {"robotType": "Flex", "apiLevel": "2.31"}
 
 # Labware
 CUSTOM = {"namespace": "custom_beta", "version": 3}
