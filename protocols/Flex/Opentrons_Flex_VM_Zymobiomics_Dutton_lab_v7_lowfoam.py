@@ -10,6 +10,8 @@ Low-foam changes from v7 (2026-11-22 AcroPrep foam test: 400 uL Binding Buffer d
     the sample before returning to the trough. The second add dispenses low (tip goes on to mix).
   - No air gap or blow-out into liquid on the Binding Buffer add or the spin-plate loads.
     The load tip keeps a 20 uL reserve, so it never pushes air through the liquid.
+  - Elution setting (default Centrifuge): stops after Wash 2 for an off-deck dry spin and
+    centrifuge elution. Vacuum elution sprayed foam across the plate on 2026-11-23.
   - Gentler Binding Buffer mix: 5 x 600 uL at 80 uL/s (was 10 x 900 uL at 150 uL/s).
 
 Before the run (manual): prefilter the lysate through the AcroPrep prefilter plate and put
@@ -52,7 +54,7 @@ WELL_MARGIN = 1_500         # uL left in each reservoir well after its last draw
 BINDING_VOL = 600           # added twice
 LOADS = 4                   # lysate + binding buffer goes onto the spin plate in this many loads
 WASH1_VOL = 400
-WASH2_VOLS = (700, 200)
+WASH2_VOLS = (700, 700, 200)   # first 700 is the Extra Wash 2 (setting); kit: 700 then 200
 MIX_VOL = 600
 MIX_REPS = 5
 AIR_GAP = 20                # washes only; never dispensed into liquid
@@ -84,7 +86,7 @@ LOAD_TIME = 120             # s, after loads 1-3 (was 300)
 FINAL_LOAD_TIME = 180       # s, after the last load (was 600)
 WASH1_TIME = 170            # s at Pull Power, then the finish below (was 540)
 FINISH_TIME = 30            # s, stronger finish that clears slow wells (3 wells kept Wash 1 on 2026-11-22)
-WASH2_TIMES = (180, 120)    # s at Wash 2 Power: after the 700 uL and the 200 uL additions (was 540 each)
+WASH2_TIMES = (180, 180, 120)  # s at Wash 2 Power, matching WASH2_VOLS (was 540 each)
 DRY_TIME = 600              # s, extra pull to dry the membrane (ethanol removal)
 CLEAR_Z = 6                 # mm above the flat-well estimate of the liquid level; the pyramid bottom
                             # raises the real level ~2 mm, so this leaves ~4 mm of clearance
@@ -105,6 +107,22 @@ def add_parameters(p: protocol_api.ParameterContext):
         display_name="Dry Run",
         description="5 s vacuums, no delays, tips returned to the rack.",
         default=False,
+    )
+    p.add_str(
+        variable_name="end_mode",
+        display_name="Elution",
+        description="Elute on deck by vacuum, or stop after Wash 2 for centrifuge dry + elution.",
+        default="centrifuge",
+        choices=[
+            {"display_name": "Centrifuge (stop after Wash 2)", "value": "centrifuge"},
+            {"display_name": "Vacuum (on deck)", "value": "vacuum"},
+        ],
+    )
+    p.add_bool(
+        variable_name="extra_wash2",
+        display_name="Extra Wash 2",
+        description="Add a third Wash 2 (700 uL) to dilute salt held in the membrane.",
+        default=True,
     )
     p.add_int(
         variable_name="sample_columns",
@@ -214,7 +232,8 @@ def run(ctx: protocol_api.ProtocolContext):
 
     binding = trough("B2", "DNA Binding Buffer", "#FF0000", 2 * BINDING_VOL)
     wash1 = trough("B3", "DNA Wash Buffer 1", "#FFFB00", WASH1_VOL)
-    wash2 = trough("C2", "DNA Wash Buffer 2", "#00FF6E", sum(WASH2_VOLS))
+    wash2 = trough("C2", "DNA Wash Buffer 2", "#00FF6E",
+                   sum(WASH2_VOLS) if p.extra_wash2 else sum(WASH2_VOLS[1:]))
     water = trough("C1", "Nuclease-free water", "#0048FF", p.elution_volume, on=water_adapter)
 
     lysate = ctx.define_liquid("Clarified lysate", "Prefiltered by hand", "#B266FF")
@@ -293,7 +312,8 @@ def run(ctx: protocol_api.ProtocolContext):
 
     # ---------------- 3. Wash 1 ----------------
     # Water heating starts here (~20 min before elution) now that the wash pulls are shorter.
-    heat = p.elution_temp > 0 and not dry
+    on_deck_elution = p.end_mode == "vacuum"
+    heat = p.elution_temp > 0 and not dry and on_deck_elution
     if heat:
         temp_mod.start_set_temperature(p.elution_temp)
     pip.pick_up_tip()
@@ -303,15 +323,31 @@ def run(ctx: protocol_api.ProtocolContext):
     pull(WASH1_TIME, vent=False)                 # Pull Power, then a short stronger finish
     pull(FINISH_TIME, p.wash1_finish_power)
 
-    # ---------------- 4. Wash 2 (x2) + dry ----------------
+    # ---------------- 4. Wash 2 (x2, or x3 with Extra Wash 2) + dry ----------------
+    # 2026-11-23: two runs released 4-15x more lambda in a 2nd elution than the 1st, and the 1st
+    # eluates carried a large 230 nm salt peak: salt held in the membrane. The extra 700 uL Wash 2
+    # dilutes it before the final 200 uL rinse.
+    vols = WASH2_VOLS if p.extra_wash2 else WASH2_VOLS[1:]
+    times = WASH2_TIMES if p.extra_wash2 else WASH2_TIMES[1:]
     pip.pick_up_tip()
     set_rates("wash")
-    wash(WASH2_VOLS[0], wash2)
-    pip.move_to(sample.top(PARK_Z))
-    pull(WASH2_TIMES[0], p.wash2_power)
-    wash(WASH2_VOLS[1], wash2)
-    discard_tip()
-    pull(WASH2_TIMES[1], p.wash2_power)
+    for i, (vol, secs) in enumerate(zip(vols, times)):
+        wash(vol, wash2)
+        if i == len(vols) - 1:
+            discard_tip()
+        else:
+            pip.move_to(sample.top(PARK_Z))
+        pull(secs, p.wash2_power)
+
+    # 2026-11-23: vacuum elution sprayed foam across the whole elution plate (unused columns
+    # too) and left most lambda on the membrane; a 100 uL centrifuge re-elution got 3-6x more off.
+    if not on_deck_elution:
+        ctx.comment(
+            "Stopped after Wash 2. Off-deck: dry spin on a waste plate, 1,000 x g 5 min. Elution 1: "
+            "50 uL 65 C water, soak 5 min, spin 1,000 x g 5 min onto plate 1. Elution 2: repeat onto "
+            "plate 2. Qubit each plate separately."
+        )
+        return
     pull(DRY_TIME, p.dry_power)
 
     # ---------------- 5. Stack spin plate on elution plate, swap tips ----------------
