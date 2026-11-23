@@ -3,7 +3,11 @@ ZymoBIOMICS 96 DNA Kit on the Opentrons Flex + Vacuum Module (Dutton lab v7, low
 
 Low-foam changes from v7 (2026-11-22 AcroPrep foam test: 400 uL Binding Buffer drained in
 ~75 s at 20% pump power with no foam over a 5 min pull; 10% moved nothing):
-  - Load and wash pulls run at Pull Power (default 20%) instead of 100%. Membrane dry stays 100%.
+  - Load pulls and Wash 1 run at Pull Power (default 20%) instead of 100%. Wash 1 ends with
+    30 s at Wash 1 Finish Power (35%) to clear slow wells. Wash 2 runs at Wash 2 Power (55%).
+    Dry Power (default 100%) is a setting. Pull times cut from ~62 min to ~27 min total.
+  - First Binding Buffer add dispenses above the expected liquid level, so the tip never touches
+    the sample before returning to the trough. The second add dispenses low (tip goes on to mix).
   - No air gap or blow-out into liquid on the Binding Buffer add or the spin-plate loads.
     The load tip keeps a 20 uL reserve, so it never pushes air through the liquid.
   - Gentler Binding Buffer mix: 5 x 600 uL at 80 uL/s (was 10 x 900 uL at 150 uL/s).
@@ -72,12 +76,18 @@ EXIT_SPEED = 5              # mm/s, leaving the sample well after each load draw
 LOAD_Z = 5                  # above the membrane, lysate dispense. NOT tested on this plate
 ELUTION_Z = 4               # above the membrane, water dispense. NOT tested on this plate
 
-# Vacuum (pump power, no pressure setpoint). Load and wash pulls use the Pull Power parameter.
-DRY_POWER = 100             # %, membrane dry only: drying off ethanol wash, not a foam step
-LOAD_TIME = 300             # s, after loads 1-3
-FINAL_LOAD_TIME = 600       # s, after the last load
-WASH_TIME = 540             # s, after each wash
-DRY_TIME = 600              # s, extra pull to dry the membrane
+# Vacuum (pump power, no pressure setpoint). Powers are runtime parameters; times are below.
+
+# Pull times, set from the 2026-11-22 test (400 uL drained in ~75 s at 20%). Running long at
+# Pull Power doesn't foam, so these keep margin over the measured drain time.
+LOAD_TIME = 120             # s, after loads 1-3 (was 300)
+FINAL_LOAD_TIME = 180       # s, after the last load (was 600)
+WASH1_TIME = 170            # s at Pull Power, then the finish below (was 540)
+FINISH_TIME = 30            # s, stronger finish that clears slow wells (3 wells kept Wash 1 on 2026-11-22)
+WASH2_TIMES = (180, 120)    # s at Wash 2 Power: after the 700 uL and the 200 uL additions (was 540 each)
+DRY_TIME = 600              # s, extra pull to dry the membrane (ethanol removal)
+CLEAR_Z = 6                 # mm above the flat-well estimate of the liquid level; the pyramid bottom
+                            # raises the real level ~2 mm, so this leaves ~4 mm of clearance
 ELUTION_POWERS = (50, 75, 100)  # %, stepped up over ELUTION_TIME
 ELUTION_TIME = 240          # s, total
 ELUTION_SOAK = 300          # s, water on the membrane before the elution pull
@@ -127,6 +137,33 @@ def add_parameters(p: protocol_api.ParameterContext):
         display_name="Pull Power",
         description="Pump % for loads and washes. 20% drained 400 uL in ~75 s, no foam. 10% failed.",
         default=20,
+        minimum=15,
+        maximum=100,
+        unit="%",
+    )
+    p.add_int(
+        variable_name="wash1_finish_power",
+        display_name="Wash 1 Finish Power",
+        description="Pump % for the last 30 s of the Wash 1 pull, to clear slow wells.",
+        default=35,
+        minimum=15,
+        maximum=100,
+        unit="%",
+    )
+    p.add_int(
+        variable_name="wash2_power",
+        display_name="Wash 2 Power",
+        description="Pump % for both Wash 2 pulls (ethanol wash, lower foam risk).",
+        default=55,
+        minimum=15,
+        maximum=100,
+        unit="%",
+    )
+    p.add_int(
+        variable_name="dry_power",
+        display_name="Dry Power",
+        description="Pump % for the 10 min membrane dry. Removes ethanol before elution.",
+        default=100,
         minimum=15,
         maximum=100,
         unit="%",
@@ -223,9 +260,15 @@ def run(ctx: protocol_api.ProtocolContext):
     # push_out=0 until the final blow-out (above the liquid), so the tips stay wet between steps.
     pip.pick_up_tip()
     set_rates("binding")
-    for _ in range(2):
+    # First add: the tip returns to the trough afterwards, so it must never touch the sample.
+    # It dispenses CLEAR_Z above where the liquid will stand once this add is in.
+    # Second add: the tip goes on to mix, so it can dispense low, under the surface.
+    area = sample.length * sample.width
+    first_level = (p.lysate_volume + BINDING_VOL) / area
+    first_z = min(first_level + CLEAR_Z, sample.depth + TOP_Z)
+    for z in (first_z, MIX_DISP_Z):
         pip.aspirate(BINDING_VOL, binding.bottom(ASP_Z))
-        pip.dispense(BINDING_VOL, sample.bottom(MIX_DISP_Z), push_out=0)
+        pip.dispense(BINDING_VOL, sample.bottom(z), push_out=0)
 
     set_rates("mix")
     for _ in range(MIX_REPS):
@@ -249,25 +292,27 @@ def run(ctx: protocol_api.ProtocolContext):
     discard_tip()
 
     # ---------------- 3. Wash 1 ----------------
+    # Water heating starts here (~20 min before elution) now that the wash pulls are shorter.
+    heat = p.elution_temp > 0 and not dry
+    if heat:
+        temp_mod.start_set_temperature(p.elution_temp)
     pip.pick_up_tip()
     set_rates("wash")
     wash(WASH1_VOL, wash1)
     discard_tip()
-    pull(WASH_TIME)
+    pull(WASH1_TIME, vent=False)                 # Pull Power, then a short stronger finish
+    pull(FINISH_TIME, p.wash1_finish_power)
 
     # ---------------- 4. Wash 2 (x2) + dry ----------------
-    heat = p.elution_temp > 0 and not dry
-    if heat:
-        temp_mod.start_set_temperature(p.elution_temp)  # ~30 min before elution
     pip.pick_up_tip()
     set_rates("wash")
     wash(WASH2_VOLS[0], wash2)
     pip.move_to(sample.top(PARK_Z))
-    pull(WASH_TIME)
+    pull(WASH2_TIMES[0], p.wash2_power)
     wash(WASH2_VOLS[1], wash2)
     discard_tip()
-    pull(WASH_TIME)
-    pull(DRY_TIME, DRY_POWER)
+    pull(WASH2_TIMES[1], p.wash2_power)
+    pull(DRY_TIME, p.dry_power)
 
     # ---------------- 5. Stack spin plate on elution plate, swap tips ----------------
     ctx.move_labware(collar, vm.manifold_dock, use_gripper=True)
