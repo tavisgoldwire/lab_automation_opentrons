@@ -11,7 +11,9 @@ Low-foam changes from v7 (2026-11-22 AcroPrep foam test: 400 uL Binding Buffer d
   - No air gap or blow-out into liquid on the Binding Buffer add or the spin-plate loads.
     The load tip keeps a 20 uL reserve, so it never pushes air through the liquid.
   - Wash Soak (default 60 s): every wash sits on the membrane, vacuum off, before its pull.
-  - Elution setting (default Centrifuge): stops after the washes for an off-deck dry spin and
+  - Elution setting (default Centrifuge): robot does the vacuum dry and adds the elution water
+    twice (same tips), pausing for the operator's dry spin and two centrifuge elutions.
+    Old note: for an off-deck dry spin and
     centrifuge elution. Vacuum elution sprayed foam across the plate on 2026-11-23.
   - Gentler Binding Buffer mix: 5 x 600 uL at 80 uL/s (was 10 x 900 uL at 150 uL/s).
 
@@ -114,10 +116,10 @@ def add_parameters(p: protocol_api.ParameterContext):
     p.add_str(
         variable_name="end_mode",
         display_name="Elution",
-        description="Elute on deck by vacuum, or stop after Wash 2 for centrifuge dry + elution.",
+        description="Vacuum: elute on deck. Centrifuge: pauses for dry spin and two spun elutions.",
         default="centrifuge",
         choices=[
-            {"display_name": "Centrifuge (stop after Wash 2)", "value": "centrifuge"},
+            {"display_name": "Centrifuge (manual spins)", "value": "centrifuge"},
             {"display_name": "Vacuum (on deck)", "value": "vacuum"},
         ],
     )
@@ -253,7 +255,8 @@ def run(ctx: protocol_api.ProtocolContext):
                    sum(WASH2_VOLS) + (EXTRA_WASH_VOL if p.extra_wash == "wash2" else 0))
     ethanol = (trough("C3", "80% ethanol", "#B3E5FC", EXTRA_WASH_VOL)
                if p.extra_wash == "ethanol" else None)
-    water = trough("C1", "Nuclease-free water", "#0048FF", p.elution_volume, on=water_adapter)
+    n_elutions = 1 if p.end_mode == "vacuum" else 2
+    water = trough("C1", "Nuclease-free water", "#0048FF", n_elutions * p.elution_volume, on=water_adapter)
 
     lysate = ctx.define_liquid("Clarified lysate", "Prefiltered by hand", "#B266FF")
     for column in samples.columns()[:n]:
@@ -332,7 +335,7 @@ def run(ctx: protocol_api.ProtocolContext):
     # ---------------- 3. Wash 1 ----------------
     # Water heating starts here (~20 min before elution) now that the wash pulls are shorter.
     on_deck_elution = p.end_mode == "vacuum"
-    heat = p.elution_temp > 0 and not dry and on_deck_elution
+    heat = p.elution_temp > 0 and not dry
     if heat:
         temp_mod.start_set_temperature(p.elution_temp)
     pip.pick_up_tip()
@@ -369,13 +372,39 @@ def run(ctx: protocol_api.ProtocolContext):
     pull(DRY_TIME, p.dry_power)
 
     # 2026-11-23: vacuum elution sprayed foam across the whole elution plate (unused columns
-    # too) and left most lambda on the membrane; a 100 uL centrifuge re-elution got 3-6x more off.
+    # too) and left most lambda on the membrane. Centrifuge mode: the robot does the water, the
+    # operator does the spins. The plate stays on the collar; the vacuum stays off (nothing drains
+    # without it: 10% pump power moved nothing on 2026-11-22).
     if not on_deck_elution:
-        ctx.comment(
-            "Stopped after the washes and vacuum dry. Off-deck: dry spin on a waste plate, 1,000 x g 5 min. Elution 1: "
-            "50 uL 65 C water, soak 5 min, spin 1,000 x g 5 min onto plate 1. Elution 2: repeat onto "
-            "plate 2. Qubit each plate separately."
+        ctx.move_labware(racks[-1], "D2" if dry else chute, use_gripper=True)
+        ctx.move_labware(elution_tips, tip_adapters["D1"], use_gripper=True)
+        ctx.pause(
+            "DRY SPIN: take the binding plate off the collar, spin on a waste plate 1,000 x g "
+            "5-10 min, wipe the underside, note any residual liquid. Put it back on the collar, "
+            "press all four corners down, then Resume."
         )
+        if heat:
+            temp_mod.await_temperature(p.elution_temp)
+        set_rates("water")
+        pip.flow_rate.blow_out = 10
+        for n in (1, 2):
+            pip.pick_up_tip(elution_tips["A1"])       # same tips both times: they never touch the membrane
+            pip.aspirate(p.elution_volume, water.bottom(ASP_Z))
+            pip.dispense(p.elution_volume, spin.bottom(ELUTION_Z))
+            pip.blow_out(spin.bottom(ELUTION_Z))
+            if n == 1:
+                pip.return_tip()
+            else:
+                discard_tip()
+            hold(ELUTION_SOAK)
+            ctx.pause(
+                f"ELUTION {n}: water soaked {ELUTION_SOAK // 60} min. Move the binding plate onto "
+                f"elution plate {n}, spin 1,000 x g 5 min. "
+                + ("Then put the binding plate back on the collar, press down, and Resume."
+                   if n == 1 else "Done. Qubit plates 1 and 2 separately.")
+            )
+        if heat:
+            temp_mod.deactivate()
         return
 
     # ---------------- 5. Stack spin plate on elution plate, swap tips ----------------
